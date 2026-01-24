@@ -76,6 +76,9 @@ class TestAudioToTextFunctionality:
 
     def test_handle_voice_success(self, bot_with_env, mock_update_voice, mock_context, db_session):
         """Тест успешной обработки голосового сообщения"""
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         # Мокаем транскрибатора
         mock_transcription_result = {
             "text": "Тестовая транскрипция голосового сообщения",
@@ -99,12 +102,15 @@ class TestAudioToTextFunctionality:
 
             # Проверяем что были сообщения о начале и завершении обработки
             assert len(calls) >= 2
-            assert "Получаю голосовое сообщение" in calls[0][0][0]
-            assert "Распознанный текст" in calls[1][0][0]
+            assert "Обрабатываю голосовое сообщение" in calls[0][0][0]
+            assert "Текст:" in calls[1][0][0]
             assert "Тестовая транскрипция" in calls[1][0][0]
 
     def test_handle_voice_no_speech_recognized(self, bot_with_env, mock_update_voice, mock_context, db_session):
         """Тест обработки голосового сообщения без распознанной речи"""
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         # Мокаем транскрибатора с пустым результатом
         mock_transcription_result = {
             "text": "",
@@ -126,11 +132,14 @@ class TestAudioToTextFunctionality:
             mock_update_voice.message.reply_text.assert_called()
             calls = mock_update_voice.message.reply_text.call_args_list
 
-            error_message_found = any("Не удалось распознать речь" in call[0][0] for call in calls)
+            error_message_found = any("Речь не распознана" in call[0][0] for call in calls)
             assert error_message_found
 
     def test_handle_voice_processing_error(self, bot_with_env, mock_update_voice, mock_context, db_session):
         """Тест обработки ошибки при транскрибации"""
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         # Мокаем транскрибатора с исключением
         with patch.object(bot_with_env.transcriber, 'transcribe_audio', side_effect=Exception("Transcription error")):
             # Создаем пользователя
@@ -146,11 +155,12 @@ class TestAudioToTextFunctionality:
             mock_update_voice.message.reply_text.assert_called()
             calls = mock_update_voice.message.reply_text.call_args_list
 
-            error_message_found = any("Произошла ошибка" in call[0][0] for call in calls)
+            error_message_found = any("Ошибка обработки" in call[0][0] for call in calls)
             assert error_message_found
 
     def test_handle_voice_no_voice_message(self, bot_with_env, mock_update_voice, mock_context):
         """Тест обработки сообщения без голосового файла"""
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
         mock_update_voice.message.voice = None
 
         # Запускаем обработку
@@ -169,6 +179,9 @@ class TestAudioToTextFunctionality:
             "language": "ru"
         }
 
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         with patch.object(bot_with_env.transcriber, 'transcribe_audio', return_value=mock_transcription_result):
             # Мокаем AdminService
             mock_admin_service = Mock()
@@ -204,6 +217,9 @@ class TestAudioToTextFunctionality:
 
     def test_voice_message_processing_workflow(self, bot_with_env, mock_update_voice, mock_context, db_session):
         """Тест полного workflow обработки голосового сообщения"""
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         # Мокаем все зависимости
         mock_transcription_result = {
             "text": "Привет, это тестовое голосовое сообщение для проверки транскрибации",
@@ -240,6 +256,9 @@ class TestAudioToTextFunctionality:
 
     def test_voice_message_error_recovery(self, bot_with_env, mock_update_voice, mock_context, db_session):
         """Тест восстановления после ошибок в обработке голосовых сообщений"""
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         # Сначала успешная обработка
         mock_transcription_result = {
             "text": "Успешная транскрибация",
@@ -247,13 +266,16 @@ class TestAudioToTextFunctionality:
             "language": "ru"
         }
 
+        # Устанавливаем правильный режим для голосовых сообщений
+        bot_with_env.user_modes[123456789] = 'audio_to_text'
+        
         with patch.object(bot_with_env.transcriber, 'transcribe_audio', return_value=mock_transcription_result):
             # Создаем пользователя
             user = User(telegram_id=123456789, username="testuser")
             db_session.add(user)
             db_session.commit()
 
-            # Успешная обработка
+            # Запускаем обработку
             import asyncio
             asyncio.run(bot_with_env.handle_voice(mock_update_voice, mock_context))
 

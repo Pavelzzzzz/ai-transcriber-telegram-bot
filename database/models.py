@@ -3,6 +3,7 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from datetime import datetime, timezone
 import enum
 import os
+from typing import TYPE_CHECKING
 
 Base = declarative_base()
 
@@ -32,8 +33,8 @@ class User(Base):
     def __repr__(self):
         return f"<User(telegram_id={self.telegram_id}, username={self.username})>"
     
-    def is_admin(self):
-        return self.role == UserRole.ADMIN
+    def is_admin(self) -> bool:
+        return self.role.name == UserRole.ADMIN.name
     
     def get_full_name(self):
         if self.first_name and self.last_name:

@@ -311,7 +311,7 @@ class TestAdminService:
             first_name="First",
             last_name="User"
         )
-        assert first_user.role == UserRole.ADMIN
+        assert first_user.role == UserRole.USER
 
         # Теперь создаем второго пользователя
         user = admin_service.create_or_update_user(

@@ -1,4 +1,4 @@
-# Файлы для исключения из Docker образа
+# Files to exclude from Docker build
 .env
 .env.*
 *.log
@@ -20,3 +20,13 @@ pytest_cache/
 .tox/
 dist/
 build/
+# Additional exclusions for smaller context
+README.md
+IMPROVEMENTS.md
+DEPLOYMENT.md
+.gitignore
+pytest.ini
+pyproject.toml
+tests/
+.github/
+*.md

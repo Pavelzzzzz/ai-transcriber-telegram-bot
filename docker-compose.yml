@@ -1,25 +1,17 @@
 services:
   telegram-bot:
-    image: telegram_ai-transcriber_bot:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: telegram_ai-transcriber_bot
+    build: .
+    image: ai-transcriber-bot:latest
+    container_name: ai-transcriber-bot
     restart: unless-stopped
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - ADMIN_USERNAMES=${ADMIN_USERNAMES}
-      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_MODEL=${WHISPER_MODEL:-tiny}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MAX_IMAGE_SIZE=${MAX_IMAGE_SIZE:-20}
-      - TEMP_DIR=${TEMP_DIR:-downloads}
-      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-ru}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-20}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
     volumes:
       - ./logs:/app/logs
       - ./downloads:/app/downloads
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s

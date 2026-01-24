@@ -106,7 +106,7 @@ class AdminService:
             return True
         return False
     
-    def unblock_user(self, admin_telegram_id: int, target_user_id: int, reason: str = None) -> bool:
+    def unblock_user(self, admin_telegram_id: int, target_user_id: int, reason: str | None = None) -> bool:
         """Разблокировка пользователя"""
         # Проверка прав администратора
         if not self.is_admin(admin_telegram_id):
@@ -163,8 +163,8 @@ class AdminService:
             user.last_activity = datetime.now(timezone.utc)
             self.db.commit()
     
-    def create_or_update_user(self, telegram_id: int, username: str = None,
-                            first_name: str = None, last_name: str = None) -> User:
+    def create_or_update_user(self, telegram_id: int, username: str | None = None,
+                             first_name: str | None = None, last_name: str | None = None) -> User:
         """Создание или обновление пользователя"""
         user = self.db.query(User).filter(User.telegram_id == telegram_id).first()
 
@@ -179,11 +179,11 @@ class AdminService:
             self.db.add(user)
         else:
             # Обновление данных существующего пользователя
-            if username:
+            if username is not None:
                 user.username = username
-            if first_name:
+            if first_name is not None:
                 user.first_name = first_name
-            if last_name:
+            if last_name is not None:
                 user.last_name = last_name
 
         # Обновляем время последней активности
@@ -213,9 +213,9 @@ class AdminService:
             self.db.add(transcription)
             self.db.commit()
 
-    def log_text_to_audio_transcription(self, user_id: int, status: str, processing_time: int = None,
-                                       error_message: str = None, text_length: int = 0,
-                                       input_text: str = None, output_audio_path: str = None):
+    def log_text_to_audio_transcription(self, user_id: int, status: str, processing_time: int | None = None,
+                                        error_message: str | None = None, text_length: int = 0,
+                                        input_text: str | None = None, output_audio_path: str | None = None):
         """Логирование преобразования текста в аудио"""
         self.log_transcription(
             user_id=user_id,
@@ -228,10 +228,10 @@ class AdminService:
             output_audio_path=output_audio_path
         )
 
-    def log_audio_to_text_transcription(self, user_id: int, status: str, processing_time: int = None,
-                                       error_message: str = None, text_length: int = 0,
-                                       input_audio_path: Optional[str] = None, recognized_text: str = None,
-                                       audio_duration: float = None):
+    def log_audio_to_text_transcription(self, user_id: int, status: str, processing_time: int | None = None,
+                                        error_message: str | None = None, text_length: int = 0,
+                                        input_audio_path: str | None = None, recognized_text: str | None = None,
+                                        audio_duration: float | None = None):
         """Логирование преобразования аудио в текст"""
         self.log_transcription(
             user_id=user_id,

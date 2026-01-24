@@ -4,6 +4,8 @@ from gtts import gTTS
 import logging
 import os
 from datetime import datetime
+from typing import Optional, Any, Dict, List, Union
+from src.exceptions import ExternalServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +14,10 @@ class WhisperTranscriber:
         """Инициализация Whisper модели"""
         self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = None
+        self.model: Optional[Any] = None
         self._load_model()
         
-    def _load_model(self):
+    def _load_model(self) -> None:
         """Загрузка Whisper модели"""
         try:
             logger.info(f"Загрузка Whisper модели {self.model_name} на устройстве {self.device}...")
@@ -56,16 +58,24 @@ class WhisperTranscriber:
         try:
             logger.info(f"Транскрибация аудио: {audio_path}")
 
+            if not self.model:
+                self._load_model()
+                
+            if not self.model:
+                raise ExternalServiceError("Не удалось загрузить Whisper модель", service_name="Whisper")
+                
             result = self.model.transcribe(audio_path, language=language)
-
-            transcribed_text = result["text"].strip()
-
+ 
+            transcribed_text = result.get("text", "")
+            if isinstance(transcribed_text, str):
+                transcribed_text = transcribed_text.strip()
+ 
             # Получение длительности аудио
-            audio_duration = None
+            audio_duration = 0.0
             if "segments" in result and result["segments"]:
                 # Получаем длительность из последнего сегмента
                 last_segment = result["segments"][-1]
-                if "end" in last_segment:
+                if isinstance(last_segment, dict) and last_segment.get("end"):
                     audio_duration = float(last_segment["end"])
 
             logger.info(f"Транскрибация завершена, длина текста: {len(transcribed_text)}, длительность: {audio_duration}")

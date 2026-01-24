@@ -1,13 +1,13 @@
-# Оптимизированный Dockerfile для AI Транскрибатора
+# Оптимизированный Dockerfile для AI Транскрибатора (Linux)
 FROM python:3.11-slim
 
-# Метки образа
-LABEL maintainer="AI Transcriber Team"
-LABEL description="AI-powered Telegram bot for text transcription from images and audio"
-LABEL version="1.0.0"
-LABEL name="telegram_ai-transcriber_bot"
+# Метаданные образа
+LABEL maintainer="AI Transcriber Team" \
+      description="AI-powered Telegram bot for text transcription" \
+      version="1.0.0" \
+      name="ai-transcriber-bot"
 
-# Устанавливаем системные зависимости за один RUN
+# Установка системных зависимостей
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-rus \
@@ -15,52 +15,45 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
-    libxrender-dev \
-    libglib2.0-0 \
     libgl1 \
-    wget \
-    git \
+    libglib2.0-0 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Создаем рабочую директорию и переключаемся на нее
+# Создание рабочего каталога
 WORKDIR /app
 
-# Используем non-root пользователя
-RUN useradd --create-home --shell /bin/bash app \
-    && chown -R app:app /app
+# Создание non-root пользователя
+RUN useradd --create-home --shell /bin/bash app
 
-# Устанавливаем переменные окружения для pip
+# Настройка переменных окружения для pip
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_ROOT_USER_ACTION=ignore
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Копируем requirements.txt и устанавливаем зависимости от имени app
+# Копирование и установка зависимостей
 COPY --chown=app:app requirements.txt .
 USER app
-
-# Устанавливаем зависимости
 RUN pip install --user --upgrade pip \
     && pip install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install --user -r requirements.txt
 
-# Переключаемся обратно на root для копирования файлов
+# Переключение на root для копирования файлов
 USER root
 
-# Копируем исходный код
+# Копирование исходного кода
 COPY --chown=app:app . .
 
-# Создаем директории с правильными правами
+# Создание необходимых директорий с правами
 RUN mkdir -p downloads logs \
+    && chown -R app:app /app \
     && chmod 755 downloads logs
 
-# Устанавливаем переменные окружения
-ENV PYTHONPATH=/app \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH="/home/app/.local/bin:$PATH"
+# Настройка PATH для user packages
+ENV PATH="/home/app/.local/bin:$PATH"
 
-# Переключаемся на пользователя app
+# Переключение на пользователя app
 USER app
 
 # Health check
