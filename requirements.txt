@@ -15,6 +15,11 @@ scipy>=1.11.0
 # Text-to-Speech
 gtts>=2.5.0
 
+# Language Processing & Grammar
+langdetect>=1.0.9
+pyspellchecker>=0.6.3
+spacy>=3.6.0
+
 # AI/ML Dependencies (CPU optimized for ARM/x64)
 torch>=2.1.0
 torchaudio>=2.1.0

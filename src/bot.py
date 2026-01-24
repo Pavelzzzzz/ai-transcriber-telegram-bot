@@ -11,6 +11,7 @@ load_dotenv()
 
 from utils.whisper_transcriber import WhisperTranscriber
 from utils.image_processor import ImageProcessor
+from utils.multilingual_processor import MultilingualTextProcessor, TextAnalysisResult
 
 # Basic logging setup
 logging.basicConfig(level=logging.INFO)
@@ -135,6 +136,9 @@ class TelegramBot:
         
         self.user_modes: Dict[int, str] = {}
         self.safe_processor = SimpleSafeProcessor()
+        
+        # Многоязычный текстовый процессор
+        self.text_processor = MultilingualTextProcessor()
         
         # Настройка админов из .env
         admin_usernames = os.getenv('ADMIN_USERNAMES', '').strip()
@@ -597,22 +601,231 @@ class TelegramBot:
             await self.safe_processor.safe_reply(update, "❌ Ошибка преобразования текста в аудио")
 
     async def text_to_text_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-        """Simple text-to-text response"""
+        """Text processing with multilingual error correction and analysis"""
         try:
-            responses = [
-                f"💬 **Получено сообщение:**\n\n{text}\n\n💡 Используйте /mode для смены режима!",
-                f"📝 **Ваш текст:**\n\n{text}\n\n🔄 Для других режимов используйте /mode",
-                f"✅ **Текст обработан:**\n\n{text}\n\n🎛️ Сменить режим: /mode"
-            ]
+            # Анализ и обработка текста
+            analysis_result = await self.analyze_and_correct_text(text)
             
-            import random
-            response = random.choice(responses)
+            # Определяем язык для ответа
+            language_name = {
+                'ru': 'Русский',
+                'en': 'English', 
+                'mixed': 'Смешанный',
+                'unknown': 'Неизвестный'
+            }.get(analysis_result.language, 'Неизвестный')
+            
+            # Формируем ответ
+            response = f"🌍 **Multilingual Text Analysis ({language_name})**\n\n"
+            
+            # Оригинальный текст
+            response += f"📄 **Original:**\n{text}\n\n"
+            
+            # Исправленный текст (если есть изменения)
+            if analysis_result.corrected_text != text:
+                response += f"✅ **Corrected:**\n{analysis_result.corrected_text}\n\n"
+                response += f"🔧 **Corrections found:** {len(analysis_result.corrections)}\n\n"
+            else:
+                response += f"✅ **No errors found**\n\n"
+            
+            # Статистика
+            stats = analysis_result.stats
+            response += f"📊 **Statistics:**\n"
+            response += f"• Characters: {stats.get('chars', 0)}\n"
+            response += f"• Words: {stats.get('words', 0)}\n"
+            response += f"• Sentences: {stats.get('sentences', 0)}\n"
+            if stats.get('vowels', 0) > 0:
+                response += f"• Vowels: {stats['vowels']}\n"
+            response += "\n"
+            
+            # Подробности об исправлениях
+            if analysis_result.corrections:
+                response += f"🔍 **Issues found:**\n"
+                for correction in analysis_result.corrections[:5]:  # Показываем первые 5
+                    response += f"• {correction.description}\n"
+                if len(analysis_result.corrections) > 5:
+                    response += f"• ... and {len(analysis_result.corrections) - 5} more corrections\n"
+                response += "\n"
+            
+            # Рекомендации
+            if analysis_result.recommendations:
+                response += f"💡 **Recommendations:**\n"
+                for rec in analysis_result.recommendations:
+                    response += f"{rec}\n"
+                response += "\n"
+            
+            # Языковая информация
+            response += f"🌐 **Language:** {language_name}\n"
+            if analysis_result.language != 'unknown':
+                response += f"🔤 **Processing:** Full grammar & spell check enabled\n"
+            
+            response += f"\n🎛️ **Other modes:** /mode"
             
             await self.safe_processor.safe_reply(update, response)
                 
         except Exception as e:
-            logger.error(f"Error in text to text response: {e}")
-            await self.safe_processor.safe_reply(update, f"📝 Получил: {text}")
+            logger.error(f"Error in multilingual text to text response: {e}")
+            await self.safe_processor.safe_reply(update, f"📝 Text received:\n\n{text}\n\n❌ Analysis error. Please try another text.")
+
+    async def analyze_and_correct_text(self, text: str) -> TextAnalysisResult:
+        """Анализирует и исправляет текст с поддержкой нескольких языков"""
+        try:
+            # Используем многоязычный процессор
+            result = self.text_processor.process_text(text)
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in multilingual text analysis: {e}")
+            # Fallback к базовой обработке
+            stats = self.get_text_stats(text)
+            return TextAnalysisResult(
+                original_text=text,
+                corrected_text=text,
+                language='unknown',
+                corrections=[],
+                stats=stats,
+                recommendations=["• Текст обработан с базовыми функциями. Попробуйте другой текст."]
+            )
+
+    def get_text_stats(self, text: str) -> dict:
+        """Получает базовую статистику текста"""
+        # Подсчет символов
+        char_count = len(text)
+        
+        # Подсчет слов (простая версия)
+        words = text.split()
+        word_count = len(words)
+        
+        # Подсчет предложений (простая версия)
+        sentences = [s.strip() for s in text.split('.') if s.strip()]
+        sentence_count = len(sentences)
+        
+        return {
+            'chars': char_count,
+            'words': word_count,
+            'sentences': sentence_count
+        }
+
+    def correct_text(self, text: str) -> tuple[str, list]:
+        """Исправляет базовые ошибки в тексте"""
+        corrected = text
+        corrections = []
+        
+        # 1. Исправление пробелов
+        if '  ' in corrected:
+            corrected = ' '.join(corrected.split())
+            corrections.append("Удалены лишние пробелы")
+        
+        # 2. Исправление заглавных букв в начале предложений
+        sentences = corrected.split('. ')
+        new_sentences = []
+        for i, sentence in enumerate(sentences):
+            if sentence.strip() and len(sentence.strip()) > 0:
+                # Заглавная буква в начале предложения
+                if not sentence[0].isupper():
+                    sentence = sentence[0].upper() + sentence[1:]
+                    if i == 0:
+                        corrections.append("Добавлена заглавная буква в начале текста")
+                    else:
+                        corrections.append("Добавлены заглавные буквы в начале предложений")
+            new_sentences.append(sentence)
+        
+        corrected = '. '.join(new_sentences)
+        
+        # 3. Исправление пунктуации
+        if corrected and not corrected.endswith(('.', '!', '?')):
+            corrected += '.'
+            corrections.append("Добавлена точка в конце")
+        
+        # 4. Удаление множественных знаков препинания
+        import re
+        # Заменяем последовательность из 3+ знаков на один
+        corrected = re.sub(r'([.!?]){3,}', r'\1', corrected)
+        if re.search(r'([.!?]){3,}', text):
+            corrections.append("Исправлены множественные знаки препинания")
+        
+        # 5. Исправление常见 ошибок (простой словарь)
+        common_errors = {
+            ' ': ' ',
+            'и т.д.': 'и т.д.',
+            'т.к.': 'так как',
+            'т.е.': 'то есть',
+            'т.д': 'и т.д.',
+            'т.к': 'так как',
+            'т.е': 'то есть'
+        }
+        
+        for wrong, right in common_errors.items():
+            if wrong in corrected and wrong != right:
+                corrected = corrected.replace(wrong, right)
+                corrections.append(f"Исправлено: '{wrong}' → '{right}'")
+        
+        # 6. Проверка основных опечаток (простая версия)
+        typo_corrections = {
+            'превет': 'привет',
+            'спосибо': 'спасибо', 
+            'заранеее': 'заранее',
+            'оччень': 'очень',
+            'харошо': 'хорошо',
+            'намнаго': 'намного',
+            'перезвонить': 'перезвонить',
+            'придти': 'прийти',
+            'сайз': 'раз'
+        }
+        
+        for typo, correct in typo_corrections.items():
+            if typo in corrected.lower():
+                # Простая замена с учетом регистра
+                pattern = re.compile(re.escape(typo), re.IGNORECASE)
+                corrected = pattern.sub(correct, corrected)
+                corrections.append(f"Исправлена опечатка: '{typo}' → '{correct}'")
+        
+        # 7. Проверка лишних пробелов вокруг знаков препинания
+        # Удаляем пробелы перед знаками препинания
+        corrected = re.sub(r'\s+([,.!?;:])', r'\1', corrected)
+        # Добавляем пробелы после знаков препинания (кроме начала строки)
+        corrected = re.sub(r'([,.!?;:])(?=\S)', r'\1 ', corrected)
+        corrected = re.sub(r'\s+', ' ', corrected)  # Удаляем двойные пробелы
+        
+        if re.search(r'\s+[,.!?;:]', text):
+            corrections.append("Исправлены пробелы вокруг знаков препинания")
+        
+        return corrected, corrections
+
+    def generate_recommendations(self, text: str, stats: dict) -> str:
+        """Генерирует рекомендации по улучшению текста"""
+        recommendations = []
+        
+        # Рекомендации по длине
+        if stats['words'] < 3:
+            recommendations.append("• Текст очень короткий, добавьте больше деталей")
+        elif stats['words'] > 100:
+            recommendations.append("• Текст длинный, рассмотрим возможность разделения на абзацы")
+        else:
+            recommendations.append("• Длина текста оптимальна")
+        
+        # Рекомендации по предложениям
+        if stats['sentences'] == 0:
+            recommendations.append("• Добавьте знаки препинания для лучшей читаемости")
+        elif stats['sentences'] == 1 and stats['words'] > 20:
+            recommendations.append("• Разделите длинное предложение на несколько коротких")
+        
+        # Рекомендации по структуре
+        if not any(char.isupper() for char in text):
+            recommendations.append("• Добавьте заглавные буквы для улучшения читаемости")
+        
+        # Проверка на наличие цифр
+        if any(char.isdigit() for char in text):
+            recommendations.append("• Текст содержит цифры, убедитесь что они понятны")
+        
+        # Общие рекомендации
+        if not recommendations:
+            recommendations.extend([
+                "• Текст хорошо структурирован",
+                "• Рассмотрите использование абзацев для улучшения читаемости",
+                "• Проверьте орфографию для повышения качества"
+            ])
+        
+        return '\n'.join(recommendations[:4])  # Возвращаем до 4 рекомендаций
 
     async def text_to_audio_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Legacy handler - redirects to main text handler"""
