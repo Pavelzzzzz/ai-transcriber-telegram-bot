@@ -1,0 +1,22 @@
+# Файлы для исключения из Docker образа
+.env
+.env.*
+*.log
+__pycache__
+.pyc
+.pyo
+.DS_Store
+.vscode
+.idea
+.git
+venv
+env
+downloads/
+logs/
+coverage/
+.coverage
+pytest_cache/
+.mypy_cache/
+.tox/
+dist/
+build/
