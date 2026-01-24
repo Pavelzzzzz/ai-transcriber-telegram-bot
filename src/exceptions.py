@@ -56,7 +56,7 @@ class ValidationError(BotError):
             message=message,
             error_code="VALIDATION_ERROR",
             severity=ErrorSeverity.LOW,
-            field=field,
+            context={"field": field} if field else None,
             **kwargs
         )
         self.field = field
@@ -69,7 +69,7 @@ class FileProcessingError(BotError):
             message=message,
             error_code="FILE_PROCESSING_ERROR",
             severity=ErrorSeverity.MEDIUM,
-            file_path=file_path,
+            context={"file_path": file_path} if file_path else None,
             **kwargs
         )
         self.file_path = file_path
@@ -105,7 +105,7 @@ class DatabaseError(BotError):
             error_code="DATABASE_ERROR",
             severity=ErrorSeverity.HIGH,
             is_critical=True,
-            query=query,
+            context={"query": query} if query else None,
             **kwargs
         )
         self.query = query
@@ -118,7 +118,7 @@ class ExternalServiceError(BotError):
             message=message,
             error_code="EXTERNAL_SERVICE_ERROR",
             severity=ErrorSeverity.MEDIUM,
-            service_name=service_name,
+            context={"service_name": service_name} if service_name else None,
             **kwargs
         )
         self.service_name = service_name
@@ -131,7 +131,7 @@ class RateLimitError(BotError):
             message=message,
             error_code="RATE_LIMIT_ERROR",
             severity=ErrorSeverity.MEDIUM,
-            limit=limit,
+            context={"limit": limit} if limit else None,
             **kwargs
         )
         self.limit = limit
@@ -145,7 +145,7 @@ class ConfigurationError(BotError):
             error_code="CONFIGURATION_ERROR",
             severity=ErrorSeverity.CRITICAL,
             is_critical=True,
-            config_key=config_key,
+            context={"config_key": config_key} if config_key else None,
             **kwargs
         )
         self.config_key = config_key

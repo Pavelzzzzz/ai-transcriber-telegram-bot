@@ -165,25 +165,26 @@ class TelegramBot:
 /logs - Системные логи""" if is_admin_user else ""
 
             message = f"""
-🎉 **AI Транскрибатор**
+ 🎉 **AI Транскрибатор**
 
-Я конвертирую контент между форматами с помощью ИИ.
+ Я конвертирую контент между форматами с помощью ИИ.
 
-🎛️ **Режимы работы:**
-📸 Изображение → Текст
-🎤 Аудио → Текст  
-🔊 Текст → Аудио
+ 🎛️ **Режимы работы:**
+ 📸 Изображение → Текст
+ 🎤 Аудио → Текст  
+ 🔊 Текст → Аудио
+ 💬 Текст → Ответ
 
-🔧 **Команды:**
-/start - Запуск
-/mode - Выбор режима
-/help - Помощь
-/status - Статус{admin_commands}
+ 🔧 **Команды:**
+ /start - Запуск
+ /mode - Выбор режима
+ /help - Помощь
+ /status - Статус{admin_commands}
 
-💡 **Советы:**
-• Отправьте фото для OCR
-• Отправьте голос для транскрипции
-• Используйте /mode для переключения режимов
+ 💡 **Советы:**
+ • Отправьте фото для OCR
+ • Отправьте голос для транскрипции
+ • Используйте /mode для переключения режимов
             """
             await self.safe_processor.safe_reply(update, message.strip())
         except Exception as e:
@@ -210,10 +211,11 @@ class TelegramBot:
 - Распознавание речи
 - Преобразование текста в аудио
 
-🎛️ **Режимы работы (/mode):**
-📸 Изображение → Текст
-🎤 Аудио → Текст
-🔊 Текст → Аудио
+ 🎛️ **Режимы работы (/mode):**
+ 📸 Изображение → Текст
+ 🎤 Аудио → Текст
+ 🔊 Текст → Аудио
+ 💬 Текст → Ответ
 
 🔧 **Команды:**
 /start - Запуск бота
@@ -262,13 +264,15 @@ class TelegramBot:
             keyboard = [
                 [
                     InlineKeyboardButton("📸 Изображение → Текст",
-                                       callback_data=f"mode_img_to_text_{user_id}"),
+                                       callback_data=f"mode:img_to_text:{user_id}"),
                     InlineKeyboardButton("🎤 Аудио → Текст",
-                                       callback_data=f"mode_audio_to_text_{user_id}")
+                                       callback_data=f"mode:audio_to_text:{user_id}")
                 ],
                 [
                     InlineKeyboardButton("🔊 Текст → Аудио",
-                                       callback_data=f"mode_text_to_audio_{user_id}")
+                                       callback_data=f"mode:text_to_audio:{user_id}"),
+                    InlineKeyboardButton("💬 Текст → Ответ",
+                                       callback_data=f"mode:text_to_text:{user_id}")
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
@@ -280,18 +284,18 @@ class TelegramBot:
             }
 
             message = f"🎛️ **Выберите режим работы**\n\n"
-            message += f"Текущий режим: {mode_names.get(current_mode, 'Не выбран')}\n\n"
+            message += f"🎯 **Текущий режим:** {mode_names.get(current_mode, 'Не выбран')}\n\n"
             message += "📸 **Изображение → Текст:** Отправьте фото → получите текст\n"
             message += "🎤 **Аудио → Текст:** Отправьте голос → получите текст\n"
-            message += "🔊 **Текст → Аудио:** Отправьте текст → получите голос"
+            message += "🔊 **Текст → Аудио:** Отправьте текст → получите голос\n"
+            message += "💬 **Текст → Ответ:** Отправьте текст → получите ответ"
 
-            await self.safe_processor.safe_reply(update, message.strip())
-            
-            # Send keyboard
+            # Send both text and keyboard in one message
             if update.message:
                 await update.message.reply_text(
-                    "Выберите режим:",
-                    reply_markup=reply_markup
+                    message.strip(),
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown"
                 )
                 
         except Exception as e:
@@ -450,14 +454,14 @@ class TelegramBot:
             action = query.data
 
             # Handle mode callbacks
-            if action and action.startswith("mode_"):
+            if action and action.startswith("mode:"):
                 try:
-                    parts = action.split("_")
-                    if len(parts) != 4 or parts[0] != "mode":
+                    parts = action.split(":")
+                    if len(parts) != 3 or parts[0] != "mode":
                         raise ValueError("Invalid callback format")
                     
-                    action_type = parts[1]
-                    user_id_part = parts[3]
+                    mode_type = parts[1]
+                    user_id_part = parts[2]
                     
                     if not user_id_part.isdigit():
                         raise ValueError("Invalid user_id format")
@@ -467,22 +471,19 @@ class TelegramBot:
                         await query.edit_message_text("❌ Ошибка доступа")
                         return
                     
-                    mode_mapping = {
-                        'img_to_text': 'img_to_text',
-                        'audio_to_text': 'audio_to_text',
-                        'text_to_audio': 'text_to_audio'
-                    }
+                    valid_modes = ['img_to_text', 'audio_to_text', 'text_to_audio', 'text_to_text']
                     
-                    if action_type not in mode_mapping:
+                    if mode_type not in valid_modes:
                         await query.edit_message_text("❌ Неизвестный тип режима")
                         return
                     
-                    mode = mode_mapping[action_type]
+                    mode = mode_type
                     
                     mode_names = {
                         'img_to_text': '📸 Изображение → Текст',
                         'audio_to_text': '🎤 Аудио → Текст',
-                        'text_to_audio': '🔊 Текст → Аудио'
+                        'text_to_audio': '🔊 Текст → Аудио',
+                        'text_to_text': '💬 Текст → Ответ'
                     }
 
                     self.user_modes[user_id] = mode
@@ -517,6 +518,106 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error in callback handler: {e}")
 
+    async def text_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle text messages based on current mode"""
+        try:
+            if not update.effective_user:
+                return
+                
+            user_id = update.effective_user.id
+            current_mode = self.user_modes.get(user_id, 'img_to_text')
+            
+            if not update.message or not update.message.text:
+                return
+                
+            text = update.message.text
+            
+            # Handle different modes
+            if current_mode == 'text_to_audio':
+                await self.text_to_audio_conversion(update, context, text)
+            elif current_mode == 'text_to_text':
+                await self.text_to_text_response(update, context, text)
+            else:
+                await self.safe_processor.safe_reply(update, 
+                    f"ℹ️ **Режим не активен для текста**\n\n"
+                    f"Текущий режим: {current_mode}\n"
+                    f"Используйте /mode для смены режима")
+                
+        except Exception as e:
+            logger.error(f"Error in text message handler: {e}")
+            await self.safe_processor.safe_reply(update, "❌ Ошибка обработки текста")
+
+    async def text_to_audio_conversion(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Convert text to audio"""
+        try:
+            if not await self.safe_processor.safe_reply(update, "🔄 Создаю аудио из текста..."):
+                return False
+            
+            # Create downloads directory if not exists
+            os.makedirs('downloads', exist_ok=True)
+            
+            # Generate audio file path
+            import uuid
+            user_id = update.effective_user.id if update.effective_user else 0
+            audio_filename = f"downloads/{user_id}_{uuid.uuid4().hex}.mp3"
+            
+            try:
+                # Try to use gTTS for text-to-speech
+                from gtts import gTTS
+                tts = gTTS(text=text, lang='ru')
+                tts.save(audio_filename)
+                
+                # Send audio file
+                if update.message:
+                    with open(audio_filename, 'rb') as audio_file:
+                        await update.message.reply_voice(voice=audio_file)
+                
+                await self.safe_processor.safe_reply(update, "✅ Аудио успешно создано!")
+                
+            except ImportError:
+                logger.warning("gTTS not available, using fallback")
+                await self.safe_processor.safe_reply(update, 
+                    f"✅ Текст получен! Преобразование в аудио временно недоступно.\n\n"
+                    f"📝 **Ваш текст:**\n{text}")
+            except Exception as tts_error:
+                logger.error(f"TTS processing failed: {tts_error}")
+                await self.safe_processor.safe_reply(update, 
+                    f"❌ Ошибка создания аудио. Попробуйте другой текст.\n\n"
+                    f"📝 **Ваш текст:**\n{text}")
+            
+            # Clean up
+            try:
+                if os.path.exists(audio_filename):
+                    os.remove(audio_filename)
+            except:
+                pass
+                
+        except Exception as e:
+            logger.error(f"Error in text to audio conversion: {e}")
+            await self.safe_processor.safe_reply(update, "❌ Ошибка преобразования текста в аудио")
+
+    async def text_to_text_response(self, update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+        """Simple text-to-text response"""
+        try:
+            responses = [
+                f"💬 **Получено сообщение:**\n\n{text}\n\n💡 Используйте /mode для смены режима!",
+                f"📝 **Ваш текст:**\n\n{text}\n\n🔄 Для других режимов используйте /mode",
+                f"✅ **Текст обработан:**\n\n{text}\n\n🎛️ Сменить режим: /mode"
+            ]
+            
+            import random
+            response = random.choice(responses)
+            
+            await self.safe_processor.safe_reply(update, response)
+                
+        except Exception as e:
+            logger.error(f"Error in text to text response: {e}")
+            await self.safe_processor.safe_reply(update, f"📝 Получил: {text}")
+
+    async def text_to_audio_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Legacy handler - redirects to main text handler"""
+        await self.text_message_handler(update, context)
+
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE):
         """Handle errors"""
         logger.error(f"Ошибка: {context.error}")
@@ -542,6 +643,7 @@ class TelegramBot:
         # Content handlers
         application.add_handler(MessageHandler(filters.PHOTO, self.safe_processor.process_photo))
         application.add_handler(MessageHandler(filters.VOICE, self.safe_processor.process_voice))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.text_message_handler))
         application.add_handler(CallbackQueryHandler(self.callback_handler))
 
         application.add_error_handler(self.error_handler)
