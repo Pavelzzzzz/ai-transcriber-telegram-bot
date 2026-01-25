@@ -125,6 +125,24 @@ class SimpleSafeProcessor:
         except Exception as e:
             logger.error(f"Error processing voice: {e}")
             return await self.safe_reply(update, "❌ Ошибка обработки аудио")
+    
+    async def process_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+        """Process text safely"""
+        try:
+            if not update.message or not update.message.text:
+                return await self.safe_reply(update, "❌ Текст не найден")
+                
+            text = update.message.text
+            
+            # Simple text processing response
+            response = f"📝 **Получен текст:**\n\n```\n{text}\n```\n\n✅ Текст обработан успешно!"
+            await self.safe_reply(update, response, parse_mode="Markdown")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error processing text: {e}")
+            return await self.safe_reply(update, "❌ Ошибка обработки текста")
 
 class TelegramBot:
     """Simplified bot with basic functionality"""

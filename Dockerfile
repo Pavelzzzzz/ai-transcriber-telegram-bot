@@ -48,7 +48,7 @@ COPY --chown=app:app . .
 # Создание необходимых директорий с правами
 RUN mkdir -p downloads logs \
     && chown -R app:app /app \
-    && chmod 755 downloads logs
+    && chmod -R 755 downloads logs
 
 # Настройка PATH для user packages
 ENV PATH="/home/app/.local/bin:$PATH"
@@ -61,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import sys; sys.exit(0)" || exit 1
 
 # Запуск бота
-CMD ["python", "main.py"]
+CMD ["python", "-u", "main.py"]
