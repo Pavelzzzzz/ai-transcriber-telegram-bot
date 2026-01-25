@@ -18,11 +18,11 @@ services:
       - ./logs:/app/logs
       - ./downloads:/app/downloads
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
+      test: ["CMD", "pgrep", "-f", "python.*main.py"]
+      interval: 90s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 2
+      start_period: 60s
     networks:
       - bot-network
 
