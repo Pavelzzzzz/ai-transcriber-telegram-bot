@@ -48,7 +48,7 @@ COPY --chown=app:app . .
 # Создание необходимых директорий с правами
 RUN mkdir -p downloads logs \
     && chown -R app:app /app \
-    && chmod -R 755 downloads logs
+    && chmod -R 777 downloads logs
 
 # Настройка PATH для user packages
 ENV PATH="/home/app/.local/bin:$PATH"
