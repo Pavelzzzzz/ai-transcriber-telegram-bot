@@ -1,11 +1,11 @@
-# Оптимизированный Dockerfile для AI Транскрибатора (Linux)
+# Multi-platform AI Transcriber Bot
 FROM python:3.11-slim
 
 # Метаданные образа
 LABEL maintainer="AI Transcriber Team" \
-      description="AI-powered Telegram bot for text transcription" \
-      version="1.0.0" \
-      name="ai-transcriber-bot"
+    description="AI-powered Telegram bot for text transcription" \
+    version="1.0.0" \
+    name="ai-transcriber-bot"
 
 # Установка системных зависимостей
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -17,8 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libgl1 \
     libglib2.0-0 \
+    curl \
+    ca-certificates \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && ldconfig
 
 # Создание рабочего каталога
 WORKDIR /app

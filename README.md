@@ -194,7 +194,6 @@ python main_simple.py
 # 🤖 Telegram Bot Configuration
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 ADMIN_USERNAMES=admin1,admin2  # Имена администраторов
-ADMIN_IDS=123456789,987654321  # ID администраторов
 
 # 🧠 AI Models Configuration
 WHISPER_MODEL=tiny              # tiny/base/small/medium/large
@@ -338,9 +337,7 @@ python -m watchdog --patterns="*.py" --recursive . --command="python main_simple
 - [ ] **Многоязычный интерфейс** - Поддержка 5+ языков
 
 #### 🎯 Планируется:
-- [ ] **Web панель администратора** - Flask/React интерфейс
 - [ ] **База данных PostgreSQL** - Продуктивная БД
-- [ ] **Redis кэширование** - Оптимизация производительности
 - [ ] **API как сервис** - Внешнее API для интеграций
 
 ## 🐛 Устранение проблем
@@ -412,7 +409,6 @@ python -c "import whisper; print('✅ Whisper работает:', whisper.availa
 - **Соблюдение PEP 8** код стиля
 - **Покрытие тестами** >80%
 - **Документация** для всех публичных функций
-- **Type safety** с mypy проверкой
 
 ## 📄 Лицензия
 
