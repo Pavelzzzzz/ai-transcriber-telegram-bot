@@ -7,12 +7,14 @@ import asyncio
 from typing import Optional, Dict, Any
 from datetime import datetime
 
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, ContextTypes
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from ...config.settings import config
 from .exceptions import BotError, ConfigurationError
-from .handlers import CommandHandlers, MediaHandlers, AdminHandlers, CallbackHandlers
+from .command_handlers import CommandHandlers
+from .media_handlers import MediaHandlers
+from .callback_handlers import CallbackHandlers
 from .user_manager import UserManager
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,6 @@ class BotCore:
         self.user_manager = UserManager(self.config)
         self.command_handlers = CommandHandlers(self.config, self.user_manager)
         self.media_handlers = MediaHandlers(self.config, self.user_manager)
-        self.admin_handlers = AdminHandlers(self.config, self.user_manager)
         self.callback_handlers = CallbackHandlers(self.config, self.user_manager)
         
         self._setup_logging()
@@ -101,7 +102,7 @@ class BotCore:
     async def admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /admin command with type safety"""
         try:
-            await self.admin_handlers.admin_command(update, context)
+            await self.command_handlers.admin_command(update, context)
         except Exception as e:
             logger.error(f"Error in admin command: {e}")
             await self.command_handlers._safe_reply(update, "❌ Ошибка. Попробуйте позже.")
@@ -109,7 +110,7 @@ class BotCore:
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /stats command with type safety"""
         try:
-            await self.admin_handlers.stats_command(update, context)
+            await self.command_handlers.stats_command(update, context)
         except Exception as e:
             logger.error(f"Error in stats command: {e}")
             await self.command_handlers._safe_reply(update, "❌ Ошибка. Попробуйте позже.")
@@ -117,7 +118,7 @@ class BotCore:
     async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /users command with type safety"""
         try:
-            await self.admin_handlers.users_command(update, context)
+            await self.command_handlers.users_command(update, context)
         except Exception as e:
             logger.error(f"Error in users command: {e}")
             await self.command_handlers._safe_reply(update, "❌ Ошибка. Попробуйте позже.")
@@ -125,7 +126,7 @@ class BotCore:
     async def logs_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /logs command with type safety"""
         try:
-            await self.admin_handlers.logs_command(update, context)
+            await self.command_handlers.logs_command(update, context)
         except Exception as e:
             logger.error(f"Error in logs command: {e}")
             await self.command_handlers._safe_reply(update, "❌ Ошибка. Попробуйте позже.")

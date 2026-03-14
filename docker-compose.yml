@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   telegram-bot:
     build:
@@ -18,7 +20,7 @@ services:
       - ./logs:/app/logs
       - ./downloads:/app/downloads
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "python.*main.py"]
+      test: ["CMD", "pgrep", "-f", "python.*bot.py"]
       interval: 90s
       timeout: 10s
       retries: 2
