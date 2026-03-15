@@ -1,32 +1,133 @@
 version: "3.8"
 
 services:
-  telegram-bot:
-    build:
-      context: .
-    image: ai-transcriber-bot:latest
-    container_name: ai-transcriber-bot
-    restart: unless-stopped
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - ADMIN_USERNAMES=${ADMIN_USERNAMES}
-      - WHISPER_MODEL=${WHISPER_MODEL:-tiny}
-      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-20}
-      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./logs:/app/logs
-      - ./downloads:/app/downloads
-    healthcheck:
-      test: ["CMD", "pgrep", "-f", "python.*bot.py"]
-      interval: 90s
-      timeout: 10s
-      retries: 2
-      start_period: 60s
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
     networks:
       - bot-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  bot-service:
+    build:
+      context: .
+      dockerfile: services/bot_service/Dockerfile
+    container_name: bot-service
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=bot-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+    networks:
+      - bot-network
+    restart: unless-stopped
+
+  ocr-service:
+    build:
+      context: .
+      dockerfile: services/ocr_service/Dockerfile
+    container_name: ocr-service
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=ocr-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bot-network
+    restart: unless-stopped
+
+  transcription-service:
+    build:
+      context: .
+      dockerfile: services/transcription_service/Dockerfile
+    container_name: transcription-service
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=transcription-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - bot-network
+    restart: unless-stopped
+
+  tts-service:
+    build:
+      context: .
+      dockerfile: services/tts_service/Dockerfile
+    container_name: tts-service
+    environment:
+      - TTS_LANGUAGE=${TTS_LANGUAGE:-ru}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=tts-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
+    networks:
+      - bot-network
+    restart: unless-stopped
+
+  image-gen-service:
+    build:
+      context: .
+      dockerfile: services/image_gen_service/Dockerfile
+    container_name: image-gen-service
+    environment:
+      - SDXL_MODEL_ID=${SDXL_MODEL_ID:-stabilityai/stable-diffusion-xl-base-1.0}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=image-gen-service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
+    networks:
+      - bot-network
+    restart: unless-stopped
 
 networks:
   bot-network:

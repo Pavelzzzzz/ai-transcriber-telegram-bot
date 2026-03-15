@@ -5,9 +5,15 @@ import logging
 import os
 from datetime import datetime
 from typing import Optional, Any, Dict, List, Union
-from src.exceptions import ExternalServiceError
 
 logger = logging.getLogger(__name__)
+
+
+class ExternalServiceError(Exception):
+    def __init__(self, message: str, service_name: str = None):
+        self.message = message
+        self.service_name = service_name
+        super().__init__(self.message)
 
 class WhisperTranscriber:
     def __init__(self, model_name="base"):
