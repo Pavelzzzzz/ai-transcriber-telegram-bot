@@ -17,9 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch based on GPU type
-RUN pip install --no-cache-dir torch && \
-    pip install --no-cache-dir -r requirements.txt
+# Copy requirements.txt
+COPY requirements.txt /app/requirements.txt
+
+# Install CPU-only PyTorch and all dependencies
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r /app/requirements.txt
 
 # ============================================
 # Stage 2: Runtime - минимальный образ
@@ -39,12 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch (CPU version as default, will be overridden at runtime if needed)
-RUN pip install --no-cache-dir torch torchvision
-
+# Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-COPY --from=builder /install /usr/local
 
 COPY services/ services/
 

@@ -21,10 +21,6 @@ gtts>=2.5.0
 # Language Processing
 langdetect>=1.0.9
 
-# AI/ML Dependencies
-torch>=2.1.0
-torchaudio>=2.1.0
-
 # Database dependencies
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.9
