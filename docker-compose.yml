@@ -1,6 +1,24 @@
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ai_transcriber}
+      POSTGRES_USER: ${DB_USER:-bot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sh:/docker-entrypoint-initdb.d/init.sh
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
@@ -51,8 +69,14 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_CLIENT_ID=bot-service
+      - DATABASE_URL=postgresql://${DB_USER:-bot}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-ai_transcriber}
+      - DB_NAME=${DB_NAME:-ai_transcriber}
+      - DB_USER=${DB_USER:-bot}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
     depends_on:
       kafka:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     volumes:
       - ./downloads:/app/downloads
@@ -62,10 +86,10 @@ services:
     restart: unless-stopped
 
   ocr-service:
-    build:
-      context: .
-      dockerfile: services/ocr_service/Dockerfile
+    image: telegram_bot-ocr-service:latest
     container_name: ocr-service
+    ports:
+      - "8002:8002"
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_CLIENT_ID=ocr-service
@@ -77,10 +101,10 @@ services:
     restart: unless-stopped
 
   transcription-service:
-    build:
-      context: .
-      dockerfile: services/transcription_service/Dockerfile
+    image: telegram_bot-stt-service:latest
     container_name: transcription-service
+    ports:
+      - "8003:8003"
     environment:
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
       - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
@@ -94,10 +118,10 @@ services:
     restart: unless-stopped
 
   tts-service:
-    build:
-      context: .
-      dockerfile: services/tts_service/Dockerfile
+    image: telegram_bot-tts-service:latest
     container_name: tts-service
+    ports:
+      - "8004:8004"
     environment:
       - TTS_LANGUAGE=${TTS_LANGUAGE:-ru}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
@@ -115,16 +139,26 @@ services:
     build:
       context: .
       dockerfile: services/image_gen_service/Dockerfile
+      args:
+        GPU_TYPE: ${GPU_TYPE}
     container_name: image-gen-service
     environment:
       - SDXL_MODEL_ID=${SDXL_MODEL_ID:-stabilityai/stable-diffusion-xl-base-1.0}
+      - SD15_MODEL_ID=${SD15_MODEL_ID:-runwayml/stable-diffusion-v1-5}
+      - FLUX_MODEL_ID=${FLUX_MODEL_ID:-black-forest-labs/FLUX.1-dev}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-sd15}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_CLIENT_ID=image-gen-service
+      - DATABASE_URL=postgresql://${DB_USER:-bot}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-ai_transcriber}
+      - GPU_TYPE=${GPU_TYPE:-intel}
     depends_on:
       kafka:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - ./downloads:/app/downloads
+      - hf_cache:/root/.cache
     networks:
       - bot-network
     restart: unless-stopped
@@ -132,3 +166,7 @@ services:
 networks:
   bot-network:
     driver: bridge
+
+volumes:
+  postgres_data:
+  hf_cache:

@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class ImageGenKafkaConsumer:
-    def __init__(self, config, result_sender: Callable[[ResultMessage], None], model_id: str = "stabilityai/stable-diffusion-xl-base-1.0"):
+    def __init__(self, config, result_sender: Callable[[ResultMessage], None], processor=None):
         self.config = config
         self.result_sender = result_sender
-        self.processor = ImageGenerationProcessor(model_id)
+        self.processor = processor if processor else ImageGenerationProcessor()
         self._consumer = None
         self._running = False
         self._thread = None
@@ -28,7 +28,11 @@ class ImageGenKafkaConsumer:
                     client_id=f"{self.config.client_id}_image_gen_consumer",
                     value_deserializer=lambda v: v.decode('utf-8'),
                     auto_offset_reset='earliest',
-                    group_id=f"{self.config.client_id}_image_gen_group"
+                    group_id=f"{self.config.client_id}_image_gen_group",
+                    max_poll_interval_ms=900000,
+                    max_poll_records=1,
+                    session_timeout_ms=30000,
+                    heartbeat_interval_ms=10000
                 )
             except Exception as e:
                 raise KafkaConsumerError(f"Failed to create Kafka consumer: {e}", "image_gen_service")
@@ -37,14 +41,9 @@ class ImageGenKafkaConsumer:
     async def _process_task(self, task: TaskMessage) -> ResultMessage:
         try:
             prompt = task.file_path
-            width = task.metadata.get('width', 1024)
-            height = task.metadata.get('height', 1024)
-            num_inference_steps = task.metadata.get('num_inference_steps', 30)
-            guidance_scale = task.metadata.get('guidance_scale', 7.5)
+            metadata = task.metadata or {}
             
-            result = await self.processor.generate_image(
-                prompt, width, height, num_inference_steps, guidance_scale
-            )
+            result = await self.processor.generate_image(prompt, metadata)
             
             return ResultMessage(
                 task_id=task.task_id,

@@ -8,10 +8,15 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 
 ### 🎯 Основные возможности
 
-- 📸 **OCR ( распознавание текста)** - Извлечение текста из изображений через Tesseract
-- 🎤 **Транскрибация** - Преобразование голосовых сообщений в текст через Whisper
-- 🔊 **Синтез речи (TTS)** - Преобразование текста в аудио через gTTS
-- 🎨 **Генерация изображений** - Создание изображений из текста через Stable Diffusion XL
+- 📸 **OCR** - Распознавание текста из изображений (Tesseract)
+- 🎤 **Транскрибация** - Преобразование голоса в текст (Whisper)
+- 🔊 **TTS** - Синтез речи из текста (gTTS)
+- 🎨 **Генерация изображений** - Текст в изображение (Stable Diffusion XL / FLUX / SD 1.5)
+  - Выбор модели: SD 1.5, SDXL, FLUX
+  - Стили: Фотореализм, Аниме, Арт, 3D
+  - Соотношения сторон: 1:1, 16:9, 9:16, 4:3
+  - Количество вариаций: 1-4
+  - Negative prompt
 - ⚡ **Масштабируемость** - Независимое масштабирование сервисов
 - 🌍 **Мультиязычность** - Поддержка русского, английского и других языков
 
@@ -40,55 +45,47 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────────┐
 │   OCR    │  │ TRANSCRIBE  │  │   TTS    │  │ IMAGE_GEN   │
 │ Service  │  │  Service    │  │ Service  │  │  Service    │
-│(Tesseract│  │ (Whisper)   │  │  (gTTS)  │  │(Stable Diff │
-│  local)  │  │   local)    │  │  local)  │  │    XL)      │
+│(Tesseract│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │
 └──────────┘  └──────────────┘  └──────────┘  └──────────────┘
+                                    │
+                                    ▼
+                            ┌──────────────┐
+                            │ PostgreSQL   │
+                            │ (user_settings)│
+                            └──────────────┘
 ```
 
 ### 📁 Структура проекта
 
 ```
 ├── services/                    # Микросервисы
-│   ├── bot_service/             # Telegram бот + Kafka
+│   ├── bot_service/             # Telegram бот
 │   │   ├── main.py
 │   │   ├── kafka_producer.py
 │   │   ├── kafka_consumer.py
-│   │   ├── Dockerfile
+│   │   ├── settings_handlers.py
 │   │   └── tests/
-│   ├── ocr_service/            # OCR (Tesseract)
-│   │   ├── main.py
-│   │   ├── processor.py
-│   │   ├── kafka_consumer.py
-│   │   ├── Dockerfile
-│   │   └── tests/
+│   ├── ocr_service/             # OCR (Tesseract)
 │   ├── transcription_service/   # Whisper
+│   ├── tts_service/             # gTTS
+│   ├── image_gen_service/       # Stable Diffusion / FLUX
 │   │   ├── main.py
-│   │   ├── processor.py
-│   │   ├── kafka_consumer.py
-│   │   ├── Dockerfile
-│   │   └── tests/
-│   ├── tts_service/            # gTTS
-│   │   ├── main.py
-│   │   ├── processor.py
-│   │   ├── kafka_consumer.py
-│   │   ├── Dockerfile
-│   │   └── tests/
-│   ├── image_gen_service/      # Stable Diffusion XL
-│   │   ├── main.py
-│   │   ├── processor.py
-│   │   ├── kafka_consumer.py
-│   │   ├── Dockerfile
-│   │   └── tests/
-│   └── common/                 # Общие модули
-│       ├── schemas.py          # Kafka сообщения
-│       ├── kafka_config.py     # Конфигурация
-│       └── exceptions.py       # Исключения
-├── config/                     # Конфигурация
-├── utils/                      # Утилиты
-├── database/                   # База данных
-├── docker-compose.yml          # Docker Compose
-├── requirements.txt            # Зависимости
-└── .env.example              # Пример окружения
+│   │   ├── processor.py        # Мультимодельная генерация
+│   │   └── kafka_consumer.py
+│   └── common/                  # Общие модули
+│       ├── base_service.py      # Базовый класс сервиса
+│       ├── schemas.py           # Kafka сообщения
+│       ├── kafka_config.py      # Конфигурация
+│       ├── database.py          # PostgreSQL подключение
+│       ├── user_settings_repo.py # Настройки пользователей
+│       ├── hardware.py          # GPU detection
+│       └── exceptions.py
+├── db/                          # Миграции Liquibase
+│   ├── Dockerfile
+│   └── changelog/
+├── docker-compose.yml            # Orchestration
+├── requirements.txt              # Python зависимости
+└── .env.example                 # Пример конфигурации
 ```
 
 ## 🚀 Быстрый старт
@@ -127,26 +124,44 @@ docker-compose down
 
 ## ⚙️ Конфигурация
 
-### Переменные окружения
+### Переменные окружения (.env)
 
 ```env
 # Telegram
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 ADMIN_USERNAMES=admin1,admin2
 
+# PostgreSQL Database
+DB_NAME=ai_transcriber
+DB_USER=bot
+DB_PASSWORD=secret
+
 # Kafka
 KAFKA_BOOTSTRAP_SERVERS=kafka:29092
 
-# Whisper (транскрибация)
+# GPU для генерации изображений (intel/nvidia/amd)
+GPU_TYPE=intel
+
+# Stable Diffusion модели
+SDXL_MODEL_ID=stabilityai/stable-diffusion-xl-base-1.0
+SD15_MODEL_ID=runwayml/stable-diffusion-v1-5
+FLUX_MODEL_ID=black-forest-labs/FLUX.1-dev
+
+# Whisper
 WHISPER_MODEL=base
 WHISPER_DEVICE=cpu
 
 # TTS
 TTS_LANGUAGE=ru
-
-# Stable Diffusion XL
-SDXL_MODEL_ID=stabilityai/stable-diffusion-xl-base-1.0
 ```
+
+### GPU Конфигурация
+
+| Тип GPU | Описание | Модели |
+|----------|----------|--------|
+| `intel` | Intel встройка/дискретная (по умолчанию) | SD 1.5, SDXL |
+| `nvidia` | NVIDIA GPU (CUDA) | SD 1.5, SDXL, FLUX |
+| `amd` | AMD GPU (ROCm) | SD 1.5, SDXL, FLUX |
 
 ### Kafka Topics
 
@@ -167,14 +182,24 @@ SDXL_MODEL_ID=stabilityai/stable-diffusion-xl-base-1.0
 
 - `/start` - Запуск бота
 - `/help` - Помощь
+- `/mode` - Выбор режима работы
+- `/settings` - Настройки генерации изображений
 - `/status` - Статус сервисов
 
-### Отправка контента
+### Режимы работы
 
-1. **Фото** → Бот распознает текст (OCR)
-2. **Голосовое** → Бот транскрибирует речь
-3. **Текст** → Бот синтезирует речь (TTS)
-4. **Текст с командой /generate** → Бот сгенерирует изображение
+1. **📸 Изображение → Текст** - Отправьте фото для OCR
+2. **🎤 Аудио → Текст** - Отправьте голосовое для транскрипции
+3. **🔊 Текст → Аудио** - Напишите текст для TTS
+4. **🖼️ Текст → Изображение** - Напишите текст для генерации
+
+### Настройки генерации (/settings)
+
+- 🎨 **Модель**: SD 1.5 / SDXL / FLUX
+- 🎭 **Стиль**: Без / Фотореализм / Аниме / Арт / 3D
+- 📐 **Размер**: 1:1 / 16:9 / 9:16 / 4:3
+- 🔢 **Вариаций**: 1-4
+- 📝 **Negative prompt**
 
 ## 🧪 Тестирование
 
@@ -190,12 +215,15 @@ pytest services/ -v
 
 - **Python 3.12** - Основной язык
 - **Apache Kafka** - Message broker
+- **PostgreSQL** - База данных (настройки пользователей)
+- **Liquibase** - Миграции БД
 - **python-telegram-bot** - Telegram API
 - **Tesseract OCR** - Распознавание текста
 - **OpenAI Whisper** - Транскрибация
 - **gTTS** - Синтез речи
-- **Stable Diffusion XL** - Генерация изображений
+- **Stable Diffusion XL / FLUX** - Генерация изображений
 - **Docker** - Контейнеризация
+- **Multi-stage builds** - Оптимизация образов
 
 ## 📄 Лицензия
 

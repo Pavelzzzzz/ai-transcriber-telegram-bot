@@ -9,10 +9,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from services.common.kafka_config import KafkaConfig
 from services.common.schemas import ResultMessage, TaskStatus
+from services.common.user_settings_repo import get_or_create_user_settings
 
 kafka_config = KafkaConfig.from_env()
 from .kafka_producer import TaskProducer
 from .kafka_consumer import ResultConsumer
+from . import settings_handlers
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -70,7 +72,7 @@ class TelegramBotService:
         
         task_info = self.pending_tasks.get(result.task_id)
         if not task_info:
-            logger.warning(f"No pending task found for {result.task_id}")
+            logger.warning(f"No pending task found for {result.task_id}, result_data: {result.result_data}")
             return
         
         chat_id = task_info.get('chat_id')
@@ -88,6 +90,7 @@ class TelegramBotService:
                 if result.status == TaskStatus.SUCCESS:
                     if task_type == 'image_gen' and result.result_data.get('file_path'):
                         file_path = result.result_data.get('file_path')
+                        logger.info(f"Sending image to chat {chat_id}, file_path: {file_path}")
                         loop.run_until_complete(
                             self.safe_processor.send_photo_to_chat(
                                 bot, 
@@ -146,6 +149,7 @@ class TelegramBotService:
 🔧 **Команды:**
 /start - Запуск
 /mode - Выбор режима
+/settings - Настройки генерации изображений
 /help - Помощь
 /status - Статус
 
@@ -154,6 +158,7 @@ class TelegramBotService:
 • Отправьте голос для транскрипции
 • В режиме 🖼️ напишите текст для генерации изображения
 • Используйте /mode для переключения режимов
+• Используйте /settings для настройки генерации изображений
         """.strip()
         await self.safe_processor.safe_reply(update, message)
     
@@ -176,11 +181,13 @@ class TelegramBotService:
 🔧 **Команды:**
 /start - Запуск бота
 /mode - Выбор режима
+/settings - Настройки генерации изображений
 /help - Эта помощь
 /status - Статус системы
 
 💡 **Советы:**
 • Для генерации изображения: /mode → выберите 🖼️ → напишите текст
+• Используйте /settings для выбора модели, стиля, размера
 • Используйте четкие изображения для OCR
 • Говорите естественно для транскрипции
         """.strip()
@@ -339,8 +346,12 @@ class TelegramBotService:
             return
         
         user_id = update.effective_user.id if update.effective_user else 0
-        current_mode = self.user_modes.get(user_id, 'img_to_text')
         text = update.message.text
+        
+        if await settings_handlers.handle_negative_prompt_input(update, context, user_id):
+            return
+        
+        current_mode = self.user_modes.get(user_id, 'img_to_text')
         
         if current_mode == 'text_to_audio':
             await self.text_to_audio(update, text)
@@ -385,11 +396,25 @@ class TelegramBotService:
                 user_id = update.effective_user.id if update.effective_user else 0
                 chat_id = update.effective_chat.id if update.effective_chat else 0
                 
+                try:
+                    settings = get_or_create_user_settings(user_id)
+                    metadata = {
+                        'message_id': update.message.message_id,
+                        'model': settings.image_model or 'sd15',
+                        'style': settings.image_style or '',
+                        'aspect_ratio': settings.aspect_ratio or '1:1',
+                        'num_variations': settings.num_variations or 1,
+                        'negative_prompt': settings.negative_prompt or '',
+                    }
+                except Exception as e:
+                    logger.warning(f"Failed to get user settings: {e}")
+                    metadata = {'message_id': update.message.message_id}
+                
                 task = self.producer.create_image_gen_task(
                     user_id=user_id,
                     chat_id=chat_id,
                     prompt=text,
-                    metadata={'message_id': update.message.message_id}
+                    metadata=metadata
                 )
                 self.producer.send_task(task)
                 self.pending_tasks[task.task_id] = {
@@ -417,6 +442,13 @@ class TelegramBotService:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("mode", self.mode_command))
         application.add_handler(CommandHandler("status", self.status_command))
+        application.add_handler(CommandHandler("settings", settings_handlers.settings_command))
+        
+        application.add_handler(CallbackQueryHandler(settings_handlers.settings_callback, pattern="^settings:"))
+        application.add_handler(CallbackQueryHandler(settings_handlers.handle_settings_model_callback, pattern="^settings:model:"))
+        application.add_handler(CallbackQueryHandler(settings_handlers.handle_settings_style_callback, pattern="^settings:style:"))
+        application.add_handler(CallbackQueryHandler(settings_handlers.handle_settings_aspect_callback, pattern="^settings:aspect:"))
+        application.add_handler(CallbackQueryHandler(settings_handlers.handle_settings_variations_callback, pattern="^settings:variations:"))
         
         application.add_handler(MessageHandler(filters.PHOTO, self.process_photo))
         application.add_handler(MessageHandler(filters.VOICE, self.process_voice))
@@ -428,6 +460,7 @@ class TelegramBotService:
             BotCommand("start", "🚀 Запуск бота"),
             BotCommand("help", "📖 Помощь"),
             BotCommand("mode", "🔧 Выбор режима"),
+            BotCommand("settings", "🎨 Настройки изображений"),
             BotCommand("status", "📊 Статус"),
         ]
         await application.bot.set_my_commands(commands)

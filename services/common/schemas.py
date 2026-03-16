@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from enum import Enum
 import json
 import uuid
@@ -17,6 +17,41 @@ class TaskStatus(str, Enum):
     PROCESSING = "processing"
     SUCCESS = "success"
     FAILED = "failed"
+
+
+class ImageModel(str, Enum):
+    SD15 = "sd15"
+    SDXL = "sdxl"
+    FLUX = "flux"
+
+
+class ImageStyle(str, Enum):
+    NONE = ""
+    PHOTOREALISTIC = "photorealistic"
+    ANIME = "anime"
+    ART = "art"
+    THREE_D = "3d"
+
+
+class AspectRatio(str, Enum):
+    SQUARE = "1:1"
+    LANDSCAPE = "16:9"
+    PORTRAIT = "9:16"
+    CLASSIC = "4:3"
+    PHOTO = "3:2"
+    PORTRAIT_NARROW = "2:3"
+
+
+IMAGE_GEN_METADATA_DEFAULTS = {
+    "model": "sdxl",
+    "style": "",
+    "aspect_ratio": "1:1",
+    "num_variations": 1,
+    "negative_prompt": "",
+    "num_inference_steps": 30,
+    "guidance_scale": 7.5,
+    "seed": None,
+}
 
 
 @dataclass

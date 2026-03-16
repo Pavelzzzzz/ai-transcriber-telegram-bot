@@ -28,7 +28,7 @@ class ResultConsumer:
                     bootstrap_servers=self.config.bootstrap_servers,
                     client_id=f"{self.config.client_id}_consumer",
                     value_deserializer=lambda v: v.decode('utf-8'),
-                    auto_offset_reset='latest',
+                    auto_offset_reset='earliest',
                     group_id=f"{self.config.client_id}_bot_group"
                 )
             except Exception as e:
