@@ -86,7 +86,7 @@ services:
     restart: unless-stopped
 
   ocr-service:
-    image: telegram_bot-ocr-service:latest
+    image: ai-transcriber-telegram-bot-ocr-service:latest
     container_name: ocr-service
     ports:
       - "8002:8002"
@@ -101,7 +101,9 @@ services:
     restart: unless-stopped
 
   transcription-service:
-    image: telegram_bot-stt-service:latest
+    build:
+      context: .
+      dockerfile: services/transcription_service/Dockerfile
     container_name: transcription-service
     ports:
       - "8003:8003"
@@ -118,7 +120,9 @@ services:
     restart: unless-stopped
 
   tts-service:
-    image: telegram_bot-tts-service:latest
+    build:
+      context: .
+      dockerfile: services/tts_service/Dockerfile
     container_name: tts-service
     ports:
       - "8004:8004"

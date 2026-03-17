@@ -43,12 +43,12 @@ class AspectRatio(str, Enum):
 
 
 IMAGE_GEN_METADATA_DEFAULTS = {
-    "model": "sdxl",
+    "model": "sd15",
     "style": "",
     "aspect_ratio": "1:1",
     "num_variations": 1,
-    "negative_prompt": "",
-    "num_inference_steps": 30,
+    "negative_prompt": "low quality, blurry, distorted, deformed, bad anatomy, worst quality, low resolution",
+    "num_inference_steps": 50,
     "guidance_scale": 7.5,
     "seed": None,
 }

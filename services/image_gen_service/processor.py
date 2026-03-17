@@ -176,12 +176,12 @@ class ImageGenerationProcessor:
         
         meta = {**IMAGE_GEN_METADATA_DEFAULTS, **(metadata or {})}
         
-        model = meta.get("model", "sdxl")
+        model = meta.get("model", "sd15")
         style = meta.get("style", "")
         aspect_ratio = meta.get("aspect_ratio", "1:1")
         num_variations = meta.get("num_variations", 1)
         negative_prompt = meta.get("negative_prompt", "")
-        num_inference_steps = meta.get("num_inference_steps", 30)
+        num_inference_steps = meta.get("num_inference_steps", 50)
         guidance_scale = meta.get("guidance_scale", 7.5)
         seed = meta.get("seed")
         
@@ -190,6 +190,9 @@ class ImageGenerationProcessor:
         if model == "sd15":
             width = min(width, 512)
             height = min(height, 512)
+        
+        if not negative_prompt:
+            negative_prompt = "low quality, blurry, distorted, deformed, bad anatomy, worst quality, low resolution, watermark, text, signature"
         
         if style and style in STYLES_CONFIG:
             style_config = STYLES_CONFIG[style]
