@@ -23,6 +23,7 @@ class KafkaConfig:
                 'results_transcribe': os.getenv('KAFKA_TOPIC_TRANSCRIBE_RESULTS', 'results.transcribe'),
                 'results_tts': os.getenv('KAFKA_TOPIC_TTS_RESULTS', 'results.tts'),
                 'results_image_gen': os.getenv('KAFKA_TOPIC_IMAGE_GEN_RESULTS', 'results.image_gen'),
+                'notifications': os.getenv('KAFKA_TOPIC_NOTIFICATIONS', 'notifications'),
             }
         )
 

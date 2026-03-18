@@ -28,7 +28,10 @@ class OCRKafkaConsumer:
                     client_id=f"{self.config.client_id}_ocr_consumer",
                     value_deserializer=lambda v: v.decode('utf-8'),
                     auto_offset_reset='earliest',
-                    group_id=f"{self.config.client_id}_ocr_group"
+                    group_id=f"{self.config.client_id}_ocr_group",
+                    max_poll_interval_ms=300000,
+                    session_timeout_ms=30000,
+                    heartbeat_interval_ms=10000
                 )
             except Exception as e:
                 raise KafkaConsumerError(f"Failed to create Kafka consumer: {e}", "ocr_service")
@@ -77,7 +80,8 @@ class OCRKafkaConsumer:
             except Exception as e:
                 logger.error(f"Error in consumer loop: {e}")
                 if self._running:
-                    asyncio.sleep(1)
+                    import time
+                    time.sleep(1)
         
         loop.close()
     

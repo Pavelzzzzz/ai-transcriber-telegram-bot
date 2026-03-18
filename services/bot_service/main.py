@@ -13,7 +13,7 @@ from services.common.user_settings_repo import get_or_create_user_settings
 
 kafka_config = KafkaConfig.from_env()
 from .kafka_producer import TaskProducer
-from .kafka_consumer import ResultConsumer
+from .kafka_consumer import ResultConsumer, NotificationConsumer
 from . import settings_handlers
 
 logging.basicConfig(level=logging.INFO)
@@ -62,7 +62,9 @@ class TelegramBotService:
         self.safe_processor = SimpleSafeProcessor()
         self.producer = TaskProducer(kafka_config) if kafka_config.bootstrap_servers else None
         self.result_consumer = None
+        self.notification_consumer = None
         self.pending_tasks = {}
+        self.chat_id_to_user_id = {}
         self.application = None
         
         logger.info("Bot Service initialized")
@@ -133,6 +135,37 @@ class TelegramBotService:
         
         if result.task_id in self.pending_tasks:
             del self.pending_tasks[result.task_id]
+    
+    def handle_notification(self, user_id: str, message: str):
+        logger.info(f"Handling notification for user {user_id}: {message[:50]}...")
+        
+        chat_id = self._find_chat_id_for_user(user_id)
+        if not chat_id:
+            logger.warning(f"No chat_id found for user {user_id}")
+            return
+        
+        if self.application:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                bot = self.application.bot
+                loop.run_until_complete(
+                    self.safe_processor.send_message_to_chat(
+                        bot,
+                        int(chat_id),
+                        message
+                    )
+                )
+            except Exception as e:
+                logger.error(f"Error sending notification to user: {e}")
+            finally:
+                loop.close()
+    
+    def _find_chat_id_for_user(self, user_id: str) -> str | None:
+        for chat_id, uid in self.chat_id_to_user_id.items():
+            if uid == user_id:
+                return chat_id
+        return None
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         message = """
@@ -209,6 +242,45 @@ class TelegramBotService:
 🎯 **Текущий режим:** {self.user_modes.get(update.effective_user.id if update.effective_user else 0, 'img_to_text')}
         """.strip()
         await self.safe_processor.safe_reply(update, message)
+    
+    async def queue_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id if update.effective_user else 0
+        chat_id = update.effective_chat.id if update.effective_chat else 0
+        
+        user_tasks = {
+            task_id: info for task_id, info in self.pending_tasks.items()
+            if info.get('chat_id') == chat_id
+        }
+        
+        if not user_tasks:
+            message = """
+📭 **Очередь задач пуста**
+
+У вас нет активных задач в очереди.
+            """.strip()
+            await self.safe_processor.safe_reply(update, message)
+            return
+        
+        task_lines = []
+        for i, (task_id, info) in enumerate(user_tasks.items(), 1):
+            task_type = info.get('task_type', 'unknown')
+            type_names = {
+                'ocr': '📸 OCR',
+                'transcribe': '🎤 Транскрипция',
+                'image_gen': '🖼️ Изображение'
+            }
+            task_type_display = type_names.get(task_type, task_type)
+            task_lines.append(f"{i}. `{task_id[:8]}...` - {task_type_display}")
+        
+        total = len(user_tasks)
+        message = f"""
+📋 **Ваша очередь задач ({total}):**
+
+{chr(10).join(task_lines)}
+
+💡 Используйте /status для проверки общего состояния системы.
+        """.strip()
+        await self.safe_processor.safe_reply(update, message, parse_mode="Markdown")
     
     async def mode_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -294,6 +366,7 @@ class TelegramBotService:
                     'task_type': 'ocr',
                     'file_path': image_path
                 }
+                self.chat_id_to_user_id[str(chat_id)] = str(user_id)
                 await self.safe_processor.safe_reply(update, "✅ Фото получено! Отправляю на OCR обработку...\n⏳ Ожидайте результат.")
             else:
                 await self.safe_processor.safe_reply(update, "✅ Фото получено! (Kafka недоступен)")
@@ -333,6 +406,7 @@ class TelegramBotService:
                     'task_type': 'transcribe',
                     'file_path': audio_path
                 }
+                self.chat_id_to_user_id[str(chat_id)] = str(user_id)
                 await self.safe_processor.safe_reply(update, "✅ Голос получено! Отправляю на транскрипцию...\n⏳ Ожидайте результат.")
             else:
                 await self.safe_processor.safe_reply(update, "✅ Голос получено! (Kafka недоступен)")
@@ -421,6 +495,7 @@ class TelegramBotService:
                     'chat_id': chat_id,
                     'task_type': 'image_gen'
                 }
+                self.chat_id_to_user_id[str(chat_id)] = str(user_id)
                 
                 await self.safe_processor.safe_reply(update, 
                     "✅ Запрос отправлен в очередь генерации изображений!\n\n"
@@ -442,6 +517,7 @@ class TelegramBotService:
         application.add_handler(CommandHandler("help", self.help_command))
         application.add_handler(CommandHandler("mode", self.mode_command))
         application.add_handler(CommandHandler("status", self.status_command))
+        application.add_handler(CommandHandler("queue", self.queue_command))
         application.add_handler(CommandHandler("settings", settings_handlers.settings_command))
         
         application.add_handler(CallbackQueryHandler(settings_handlers.settings_callback, pattern="^settings:"))
@@ -462,6 +538,7 @@ class TelegramBotService:
             BotCommand("mode", "🔧 Выбор режима"),
             BotCommand("settings", "🎨 Настройки изображений"),
             BotCommand("status", "📊 Статус"),
+            BotCommand("queue", "📋 Ваша очередь задач"),
         ]
         await application.bot.set_my_commands(commands)
     
@@ -479,6 +556,10 @@ class TelegramBotService:
             self.result_consumer = ResultConsumer(kafka_config, self.handle_result)
             self.result_consumer.start()
             logger.info("Result consumer started")
+            
+            self.notification_consumer = NotificationConsumer(kafka_config, self.handle_notification)
+            self.notification_consumer.start()
+            logger.info("Notification consumer started")
         
         logger.info("Telegram bot started successfully!")
         application.run_polling(allowed_updates=Update.ALL_TYPES)

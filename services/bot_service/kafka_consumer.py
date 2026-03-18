@@ -54,7 +54,8 @@ class ResultConsumer:
             except Exception as e:
                 logger.error(f"Error in consumer loop: {e}")
                 if self._running:
-                    asyncio.sleep(1)
+                    import time
+                    time.sleep(1)
     
     def start(self):
         if self._running:
@@ -71,3 +72,70 @@ class ResultConsumer:
             self._consumer.close()
             self._consumer = None
         logger.info("Result consumer stopped")
+
+
+class NotificationConsumer:
+    def __init__(self, config, notification_callback: Callable[[str, str], None]):
+        self.config = config
+        self.notification_callback = notification_callback
+        self._consumer = None
+        self._running = False
+        self._thread = None
+    
+    def _get_consumer(self):
+        if self._consumer is None:
+            try:
+                from kafka import KafkaConsumer
+                self._consumer = KafkaConsumer(
+                    self.config.topics['notifications'],
+                    bootstrap_servers=self.config.bootstrap_servers,
+                    client_id=f"{self.config.client_id}_notification_consumer",
+                    value_deserializer=lambda v: v.decode('utf-8'),
+                    auto_offset_reset='earliest',
+                    group_id=f"{self.config.client_id}_notification_group",
+                    enable_auto_commit=True
+                )
+            except Exception as e:
+                raise KafkaConsumerError(f"Failed to create notification consumer: {e}", "bot_service")
+        return self._consumer
+    
+    def _process_message(self, message):
+        try:
+            import json
+            notification = json.loads(message.value)
+            user_id = notification.get('user_id', '')
+            message_text = notification.get('message', '')
+            logger.info(f"Received notification for user {user_id}: {message_text[:50]}...")
+            self.notification_callback(str(user_id), message_text)
+        except Exception as e:
+            logger.error(f"Failed to process notification: {e}")
+    
+    def _consume_loop(self):
+        consumer = self._get_consumer()
+        while self._running:
+            try:
+                messages = consumer.poll(timeout_ms=1000)
+                for topic_partition, records in messages.items():
+                    for record in records:
+                        self._process_message(record)
+            except Exception as e:
+                logger.error(f"Error in notification consumer loop: {e}")
+                if self._running:
+                    import time
+                    time.sleep(1)
+    
+    def start(self):
+        if self._running:
+            return
+        
+        self._running = True
+        self._thread = Thread(target=self._consume_loop, daemon=True)
+        self._thread.start()
+        logger.info("Notification consumer started")
+    
+    def stop(self):
+        self._running = False
+        if self._consumer:
+            self._consumer.close()
+            self._consumer = None
+        logger.info("Notification consumer stopped")

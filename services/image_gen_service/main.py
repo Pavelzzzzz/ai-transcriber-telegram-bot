@@ -47,6 +47,7 @@ class ImageGenerationService(BaseService):
         self.default_model = os.getenv('DEFAULT_MODEL', 'sd15')
         self.consumer = None
         self._result_producer = None
+        self._notification_producer = None
         self._processor = None
         self._shutdown_event = Event()
         self._initialized = False
@@ -61,7 +62,6 @@ class ImageGenerationService(BaseService):
         self.stop()
     
     def _preload_model(self) -> None:
-        """Preload the default model on service startup"""
         logger.info(f"Preloading default model: {self.default_model}")
         try:
             if self._processor is None:
@@ -73,12 +73,50 @@ class ImageGenerationService(BaseService):
             logger.error(f"Failed to preload model {self.default_model}: {e}")
             raise
     
+    def _get_notification_producer(self):
+        if self._notification_producer is None:
+            try:
+                from kafka import KafkaProducer
+                self._notification_producer = KafkaProducer(
+                    bootstrap_servers=kafka_config.bootstrap_servers,
+                    client_id=f"{kafka_config.client_id}_notification_producer",
+                    value_serializer=lambda v: v.encode('utf-8'),
+                    key_serializer=lambda k: k.encode('utf-8') if k else None
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create notification producer: {e}")
+        return self._notification_producer
+    
+    def _send_notification(self, user_id: str, message: str):
+        try:
+            producer = self._get_notification_producer()
+            if not producer:
+                return
+                
+            notification = {
+                "user_id": user_id,
+                "message": message,
+                "type": "image_generation"
+            }
+            
+            import json
+            future = producer.send(
+                kafka_config.topics['notifications'],
+                key=str(user_id),
+                value=json.dumps(notification)
+            )
+            future.get(timeout=10)
+            logger.info(f"Notification sent to user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to send notification: {e}")
+    
     def _initialize(self) -> None:
         logger.info(f"Initializing Image Generation Service...")
         
         self._preload_model()
         
         self.consumer = ImageGenKafkaConsumer(kafka_config, self.send_result, self._processor)
+        self.consumer.set_notification_sender(self._send_notification)
         self.consumer.start()
         self._initialized = True
         logger.info("Image Generation Service initialized")
@@ -146,6 +184,8 @@ class ImageGenerationService(BaseService):
             self.consumer.stop()
         if self._result_producer:
             self._result_producer.close()
+        if self._notification_producer:
+            self._notification_producer.close()
         
         logger.info("Image Generation Service stopped")
 

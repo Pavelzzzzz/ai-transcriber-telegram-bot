@@ -49,3 +49,9 @@ diffusers>=0.25.0
 transformers>=0.25.0
 accelerate>=0.25.0
 safetensors>=0.4.0
+
+# Speech Recognition
+openai-whisper
+torch
+torchvision
+torchaudio
