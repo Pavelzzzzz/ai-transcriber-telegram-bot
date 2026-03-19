@@ -327,12 +327,18 @@ async def handle_settings_style_callback(update: Update, context: ContextTypes.D
     user_id = update.effective_user.id
     style = query.data.split(":")[-1]
 
+    style_info = STYLES_CONFIG.get(style, {})
+    style_name = style_info.get("name", style)
+
     try:
         update_user_settings(user_id, image_style=style)
+        await query.edit_message_text(
+            f"✅ **Стиль изменен на:** {style_name}\n\n"
+            f"Теперь используется для генерации изображений."
+        )
     except Exception as e:
         logger.warning(f"DB not available: {e}")
-
-    await settings_command(update, context)
+        await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
 
 
 async def handle_settings_aspect_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -346,10 +352,13 @@ async def handle_settings_aspect_callback(update: Update, context: ContextTypes.
 
     try:
         update_user_settings(user_id, aspect_ratio=aspect)
+        await query.edit_message_text(
+            f"✅ **Соотношение сторон изменено на:** {aspect}\n\n"
+            f"Теперь используется для генерации изображений."
+        )
     except Exception as e:
         logger.warning(f"DB not available: {e}")
-
-    await settings_command(update, context)
+        await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
 
 
 async def handle_settings_variations_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -363,7 +372,10 @@ async def handle_settings_variations_callback(update: Update, context: ContextTy
 
     try:
         update_user_settings(user_id, num_variations=variations)
+        await query.edit_message_text(
+            f"✅ **Количество вариаций изменено на:** {variations}\n\n"
+            f"Теперь будет генерироваться {variations} изображений."
+        )
     except Exception as e:
         logger.warning(f"DB not available: {e}")
-
-    await settings_command(update, context)
+        await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
