@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import queue
+import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from threading import Lock, Thread
@@ -10,7 +12,11 @@ from .processor import ImageGenerationProcessor
 
 logger = logging.getLogger(__name__)
 
-MAX_WORKERS = int(os.getenv("IMAGE_GEN_MAX_WORKERS", "2"))
+MAX_WORKERS = int(os.getenv("IMAGE_GEN_MAX_WORKERS", "1"))
+
+SESSION_TIMEOUT_MS = 300000
+HEARTBEAT_INTERVAL_MS = 60000
+POLL_TIMEOUT_MS = 5000
 
 
 class ImageGenKafkaConsumer:
@@ -20,7 +26,12 @@ class ImageGenKafkaConsumer:
         self.processor = processor if processor else ImageGenerationProcessor()
         self._consumer = None
         self._running = False
-        self._thread = None
+
+        self._poll_thread: Thread | None = None
+        self._process_thread: Thread | None = None
+
+        self._task_queue: queue.Queue = queue.Queue()
+
         self._executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
         self._pending_tasks: dict[str, Future] = {}
         self._tasks_lock = Lock()
@@ -31,25 +42,20 @@ class ImageGenKafkaConsumer:
 
     def _get_consumer(self):
         if self._consumer is None:
-            try:
-                from kafka import KafkaConsumer
+            from kafka import KafkaConsumer
 
-                self._consumer = KafkaConsumer(
-                    self.config.topics["tasks_image_gen"],
-                    bootstrap_servers=self.config.bootstrap_servers,
-                    client_id=f"{self.config.client_id}_image_gen_consumer",
-                    value_deserializer=lambda v: v.decode("utf-8"),
-                    auto_offset_reset="earliest",
-                    group_id=f"{self.config.client_id}_image_gen_group",
-                    max_poll_interval_ms=10800000,
-                    max_poll_records=10,
-                    session_timeout_ms=30000,
-                    heartbeat_interval_ms=10000,
-                )
-            except Exception as e:
-                raise KafkaConsumerError(
-                    f"Failed to create Kafka consumer: {e}", "image_gen_service"
-                )
+            self._consumer = KafkaConsumer(
+                self.config.topics["tasks_image_gen"],
+                bootstrap_servers=self.config.bootstrap_servers,
+                client_id=f"{self.config.client_id}_image_gen_consumer",
+                value_deserializer=lambda v: v.decode("utf-8"),
+                auto_offset_reset="earliest",
+                group_id=f"{self.config.client_id}_image_gen_group",
+                max_poll_interval_ms=10800000,
+                max_poll_records=1,
+                session_timeout_ms=SESSION_TIMEOUT_MS,
+                heartbeat_interval_ms=HEARTBEAT_INTERVAL_MS,
+            )
         return self._consumer
 
     def _get_queue_status(self) -> dict:
@@ -81,34 +87,63 @@ class ImageGenKafkaConsumer:
                 user_id = str(task.user_id or task.metadata.get("user_id", "unknown"))
                 self._notification_sender(
                     user_id,
-                    f"🔄 Started processing: {task.task_id[:8]}...\n📝 Prompt: {task.file_path[:50]}...",
+                    f"Started processing: {task.task_id[:8]}...\nPrompt: {task.file_path[:50]}...",
                 )
             except Exception as e:
                 logger.warning(f"Failed to send started notification: {e}")
 
-    def _submit_task(self, task: TaskMessage) -> Future:
-        task_id = task.task_id
-        placeholder_future: Future = Future()
-        placeholder_future.set_result(None)
+    def _poll_loop(self):
+        consumer = self._get_consumer()
 
-        with self._tasks_lock:
-            self._pending_tasks[task_id] = placeholder_future
+        while self._running:
+            try:
+                messages = consumer.poll(timeout_ms=POLL_TIMEOUT_MS)
 
+                for topic_partition, records in messages.items():
+                    for record in records:
+                        try:
+                            task = TaskMessage.from_json(record.value)
+                            logger.debug(f"Polled task: {task.task_id}")
+                            self._task_queue.put(task)
+                        except Exception as e:
+                            logger.error(f"Error parsing message: {e}")
+
+            except Exception as e:
+                logger.error(f"Error in poll loop: {e}")
+                time.sleep(1)
+
+    def _process_loop(self):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        future = self._executor.submit(self._run_task_sync, task, loop)
+        while self._running:
+            try:
+                task = self._task_queue.get(timeout=1)
 
-        with self._tasks_lock:
-            self._pending_tasks[task_id] = future
+                if task is None:
+                    continue
 
-        future.add_done_callback(lambda f: self._cleanup_task(task_id, f))
+                logger.info(f"Processing task: {task.task_id}")
 
-        return future
+                future = self._executor.submit(self._run_task_sync, task, loop)
+
+                with self._tasks_lock:
+                    self._pending_tasks[task.task_id] = future
+
+                future.add_done_callback(
+                    lambda f, tid=task.task_id: self._cleanup_task(tid, f)
+                )
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Error in process loop: {e}")
+
+        loop.close()
 
     def _run_task_sync(self, task: TaskMessage, loop: asyncio.AbstractEventLoop) -> ResultMessage:
         try:
-            return loop.run_until_complete(self._process_task(task))
+            return loop.run_until_complete(self._process_task_async(task))
         finally:
             loop.close()
 
@@ -127,7 +162,7 @@ class ImageGenKafkaConsumer:
                     del self._pending_tasks[task_id]
             logger.info(f"Task {task_id} removed from pending queue")
 
-    async def _process_task(self, task: TaskMessage) -> ResultMessage:
+    async def _process_task_async(self, task: TaskMessage) -> ResultMessage:
         try:
             prompt = task.file_path
             metadata = task.metadata or {}
@@ -152,44 +187,33 @@ class ImageGenKafkaConsumer:
                 error=str(e),
             )
 
-    def _consume_loop(self):
-        consumer = self._get_consumer()
-
-        while self._running:
-            try:
-                messages = consumer.poll(timeout_ms=1000)
-                for topic_partition, records in messages.items():
-                    for record in records:
-                        try:
-                            task = TaskMessage.from_json(record.value)
-                            logger.info(f"Received image generation task: {task.task_id}")
-
-                            self._submit_task(task)
-
-                        except Exception as e:
-                            logger.error(f"Error processing message: {e}")
-            except Exception as e:
-                logger.error(f"Error in consumer loop: {e}")
-                if self._running:
-                    import time
-
-                    time.sleep(1)
-
     def start(self):
         if self._running:
             return
 
         self._running = True
-        self._thread = Thread(target=self._consume_loop, daemon=True)
-        self._thread.start()
-        logger.info(f"Image Generation Kafka consumer started with {MAX_WORKERS} workers")
+
+        self._poll_thread = Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
+
+        self._process_thread = Thread(target=self._process_loop, daemon=True)
+        self._process_thread.start()
+
+        logger.info(f"Consumer started: poll_thread + process_thread + {MAX_WORKERS} workers")
 
     def stop(self):
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=5)
+
+        self._task_queue.put(None)
+
+        if self._poll_thread:
+            self._poll_thread.join(timeout=5)
+        if self._process_thread:
+            self._process_thread.join(timeout=5)
+
         self._executor.shutdown(wait=True)
         if self._consumer:
             self._consumer.close()
             self._consumer = None
-        logger.info("Image Generation Kafka consumer stopped")
+
+        logger.info("Consumer stopped")
