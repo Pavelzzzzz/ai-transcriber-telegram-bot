@@ -79,7 +79,15 @@ class TelegramBotService:
         self.chat_id_to_user_id = {}
         self.application = None
 
+        self._async_loop: asyncio.AbstractEventLoop | None = None
+
         logger.info("Bot Service initialized")
+
+    def _get_async_loop(self) -> asyncio.AbstractEventLoop:
+        if self._async_loop is None or self._async_loop.is_closed():
+            self._async_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._async_loop)
+        return self._async_loop
 
     def handle_result(self, result: ResultMessage):
         logger.info(f"Handling result for task {result.task_id}: {result.status}")
@@ -99,8 +107,7 @@ class TelegramBotService:
             return
 
         if self.application:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            loop = self._get_async_loop()
             try:
                 bot = self.application.bot
                 if result.status == TaskStatus.SUCCESS:
@@ -138,8 +145,6 @@ class TelegramBotService:
                     )
             except Exception as e:
                 logger.error(f"Error sending result to user: {e}")
-            finally:
-                loop.close()
 
         if result.task_id in self.pending_tasks:
             del self.pending_tasks[result.task_id]
@@ -153,8 +158,7 @@ class TelegramBotService:
             return
 
         if self.application:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            loop = self._get_async_loop()
             try:
                 bot = self.application.bot
                 loop.run_until_complete(
@@ -162,8 +166,6 @@ class TelegramBotService:
                 )
             except Exception as e:
                 logger.error(f"Error sending notification to user: {e}")
-            finally:
-                loop.close()
 
     def _find_chat_id_for_user(self, user_id: str) -> str | None:
         for chat_id, uid in self.chat_id_to_user_id.items():
@@ -613,14 +615,19 @@ class TelegramBotService:
 
 
 def main():
+    bot = TelegramBotService()
     try:
-        bot = TelegramBotService()
         bot.run()
     except KeyboardInterrupt:
         logger.info("Bot stopped")
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        raise
+    finally:
+        if bot.result_consumer:
+            bot.result_consumer.stop()
+        if bot.notification_consumer:
+            bot.notification_consumer.stop()
+        if bot._async_loop and not bot._async_loop.is_closed():
+            bot._async_loop.close()
+        logger.info("Cleanup completed")
 
 
 if __name__ == "__main__":
