@@ -52,6 +52,6 @@ safetensors>=0.4.0
 
 # Speech Recognition
 openai-whisper
-torch
-torchvision
-torchaudio
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
