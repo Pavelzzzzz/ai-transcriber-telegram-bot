@@ -1,41 +1,43 @@
 """Resource cleanup manager for temporary files and resources"""
 
-import os
-import tempfile
-import shutil
-import logging
 import asyncio
-from typing import List, Optional, Any, Callable, Union
-from contextlib import contextmanager, asynccontextmanager
+import logging
+import os
+import shutil
+import tempfile
+from collections.abc import Callable
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
-from src.exceptions import FileProcessingError, ErrorHandler
+from typing import Any
+
+from src.exceptions import ErrorHandler, FileProcessingError
 
 logger = logging.getLogger(__name__)
 
 class ResourceManager:
     """Управление временными ресурсами и их очисткой"""
-    
+
     def __init__(self):
-        self._temp_files: List[str] = []
-        self._temp_dirs: List[str] = []
-        self._cleanup_callbacks: List[Callable] = []
-    
-    def register_temp_file(self, file_path: Union[str, Path]) -> str:
+        self._temp_files: list[str] = []
+        self._temp_dirs: list[str] = []
+        self._cleanup_callbacks: list[Callable] = []
+
+    def register_temp_file(self, file_path: str | Path) -> str:
         """Регистрация временного файла для очистки"""
         path_str = str(file_path)
         self._temp_files.append(path_str)
         return path_str
-    
-    def register_temp_dir(self, dir_path: Union[str, Path]) -> str:
+
+    def register_temp_dir(self, dir_path: str | Path) -> str:
         """Регистрация временной директории для очистки"""
         path_str = str(dir_path)
         self._temp_dirs.append(path_str)
         return path_str
-    
+
     def register_cleanup_callback(self, callback: Callable) -> None:
         """Регистрация callback для очистки"""
         self._cleanup_callbacks.append(callback)
-    
+
     def cleanup_file(self, file_path: str) -> bool:
         """Безопасное удаление файла"""
         try:
@@ -46,7 +48,7 @@ class ResourceManager:
         except Exception as e:
             ErrorHandler.log_error(e, {"file_path": file_path, "operation": "file_cleanup"})
         return False
-    
+
     def cleanup_directory(self, dir_path: str, remove_contents_only: bool = False) -> bool:
         """Безопасное удаление директории"""
         try:
@@ -62,7 +64,7 @@ class ResourceManager:
         except Exception as e:
             ErrorHandler.log_error(e, {"dir_path": dir_path, "operation": "dir_cleanup"})
         return False
-    
+
     def cleanup_all(self) -> None:
         """Очистка всех зарегистрированных ресурсов"""
         # Выполнение cleanup callbacks
@@ -71,20 +73,20 @@ class ResourceManager:
                 callback()
             except Exception as e:
                 ErrorHandler.log_error(e, {"operation": "cleanup_callback"})
-        
+
         # Очистка файлов
         for file_path in self._temp_files:
             self.cleanup_file(file_path)
-        
+
         # Очистка директорий
         for dir_path in self._temp_dirs:
             self.cleanup_directory(dir_path)
-        
+
         # Очистка списков
         self._temp_files.clear()
         self._temp_dirs.clear()
         self._cleanup_callbacks.clear()
-    
+
     def get_stats(self) -> dict:
         """Получение статистики использования ресурсов"""
         return {
@@ -167,27 +169,27 @@ async def async_temp_dir() -> Any:
 
 class FileDownloader:
     """Безопасная загрузка файлов с автоматической очисткой"""
-    
+
     def __init__(self, download_dir: str = "downloads"):
         self.download_dir = download_dir
         self._ensure_download_dir()
-    
+
     def _ensure_download_dir(self) -> None:
         """Создание директории для загрузок"""
         os.makedirs(self.download_dir, exist_ok=True)
         resource_manager.register_temp_dir(self.download_dir)
-    
+
     async def download_file(self, bot, file_id: str, user_id: int) -> str:
         """Загрузка файла с автоматической очисткой"""
         try:
             file = await bot.get_file(file_id)
             file_path = os.path.join(self.download_dir, f"{user_id}_{file.file_id}")
             resource_manager.register_temp_file(file_path)
-            
+
             await file.download_to_drive(file_path)
             logger.info(f"File downloaded successfully: {file_path}")
             return file_path
-            
+
         except Exception as e:
             ErrorHandler.log_error(e, {
                 "file_id": file_id,
@@ -202,7 +204,7 @@ class FileDownloader:
 
 class AudioProcessor:
     """Обработка аудио с автоматической очисткой"""
-    
+
     @staticmethod
     @asynccontextmanager
     async def process_audio(audio_path: str) -> Any:
@@ -222,7 +224,7 @@ class AudioProcessor:
 
 class ImageProcessor:
     """Обработка изображений с автоматической очисткой"""
-    
+
     @staticmethod
     @asynccontextmanager
     async def process_image(image_path: str) -> Any:

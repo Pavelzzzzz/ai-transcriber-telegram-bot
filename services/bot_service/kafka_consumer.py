@@ -1,9 +1,8 @@
 import logging
-import asyncio
-from typing import Callable, Optional, Dict, Any
+from collections.abc import Callable
 from threading import Thread
 
-from ..common import KafkaConsumerError, ResultMessage, TaskStatus, kafka_config
+from ..common import KafkaConsumerError, ResultMessage
 
 logger = logging.getLogger(__name__)
 
@@ -15,26 +14,27 @@ class ResultConsumer:
         self._consumer = None
         self._running = False
         self._thread = None
-    
+
     def _get_consumer(self):
         if self._consumer is None:
             try:
                 from kafka import KafkaConsumer
+
                 self._consumer = KafkaConsumer(
-                    self.config.topics['results_ocr'],
-                    self.config.topics['results_transcribe'],
-                    self.config.topics['results_tts'],
-                    self.config.topics['results_image_gen'],
+                    self.config.topics["results_ocr"],
+                    self.config.topics["results_transcribe"],
+                    self.config.topics["results_tts"],
+                    self.config.topics["results_image_gen"],
                     bootstrap_servers=self.config.bootstrap_servers,
                     client_id=f"{self.config.client_id}_consumer",
-                    value_deserializer=lambda v: v.decode('utf-8'),
-                    auto_offset_reset='earliest',
-                    group_id=f"{self.config.client_id}_bot_group"
+                    value_deserializer=lambda v: v.decode("utf-8"),
+                    auto_offset_reset="earliest",
+                    group_id=f"{self.config.client_id}_bot_group",
                 )
             except Exception as e:
                 raise KafkaConsumerError(f"Failed to create Kafka consumer: {e}", "bot_service")
         return self._consumer
-    
+
     def _process_message(self, message):
         try:
             result = ResultMessage.from_json(message.value)
@@ -42,7 +42,7 @@ class ResultConsumer:
             self.result_callback(result)
         except Exception as e:
             logger.error(f"Failed to process message: {e}")
-    
+
     def _consume_loop(self):
         consumer = self._get_consumer()
         while self._running:
@@ -55,17 +55,18 @@ class ResultConsumer:
                 logger.error(f"Error in consumer loop: {e}")
                 if self._running:
                     import time
+
                     time.sleep(1)
-    
+
     def start(self):
         if self._running:
             return
-        
+
         self._running = True
         self._thread = Thread(target=self._consume_loop, daemon=True)
         self._thread.start()
         logger.info("Result consumer started")
-    
+
     def stop(self):
         self._running = False
         if self._consumer:
@@ -81,35 +82,39 @@ class NotificationConsumer:
         self._consumer = None
         self._running = False
         self._thread = None
-    
+
     def _get_consumer(self):
         if self._consumer is None:
             try:
                 from kafka import KafkaConsumer
+
                 self._consumer = KafkaConsumer(
-                    self.config.topics['notifications'],
+                    self.config.topics["notifications"],
                     bootstrap_servers=self.config.bootstrap_servers,
                     client_id=f"{self.config.client_id}_notification_consumer",
-                    value_deserializer=lambda v: v.decode('utf-8'),
-                    auto_offset_reset='earliest',
+                    value_deserializer=lambda v: v.decode("utf-8"),
+                    auto_offset_reset="earliest",
                     group_id=f"{self.config.client_id}_notification_group",
-                    enable_auto_commit=True
+                    enable_auto_commit=True,
                 )
             except Exception as e:
-                raise KafkaConsumerError(f"Failed to create notification consumer: {e}", "bot_service")
+                raise KafkaConsumerError(
+                    f"Failed to create notification consumer: {e}", "bot_service"
+                )
         return self._consumer
-    
+
     def _process_message(self, message):
         try:
             import json
+
             notification = json.loads(message.value)
-            user_id = notification.get('user_id', '')
-            message_text = notification.get('message', '')
+            user_id = notification.get("user_id", "")
+            message_text = notification.get("message", "")
             logger.info(f"Received notification for user {user_id}: {message_text[:50]}...")
             self.notification_callback(str(user_id), message_text)
         except Exception as e:
             logger.error(f"Failed to process notification: {e}")
-    
+
     def _consume_loop(self):
         consumer = self._get_consumer()
         while self._running:
@@ -122,17 +127,18 @@ class NotificationConsumer:
                 logger.error(f"Error in notification consumer loop: {e}")
                 if self._running:
                     import time
+
                     time.sleep(1)
-    
+
     def start(self):
         if self._running:
             return
-        
+
         self._running = True
         self._thread = Thread(target=self._consume_loop, daemon=True)
         self._thread.start()
         logger.info("Notification consumer started")
-    
+
     def stop(self):
         self._running = False
         if self._consumer:

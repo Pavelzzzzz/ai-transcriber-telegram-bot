@@ -1,9 +1,20 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Enum, Float
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-from datetime import datetime, timezone
 import enum
 import os
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+)
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
 
@@ -14,7 +25,7 @@ class UserRole(enum.Enum):
 class User(Base):
     """Модель пользователя"""
     __tablename__ = 'users'
-    
+
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False, index=True)
     username = Column(String(100), nullable=True)
@@ -23,19 +34,19 @@ class User(Base):
     role = Column(Enum(UserRole), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_blocked = Column(Boolean, default=False, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    last_activity = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+    last_activity = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
     # Связи
     transcriptions = relationship("Transcription", back_populates="user", cascade="all, delete-orphan")
     admin_logs = relationship("AdminLog", back_populates="admin", cascade="all, delete-orphan")
-    
+
     def __repr__(self):
         return f"<User(telegram_id={self.telegram_id}, username={self.username})>"
-    
+
     def is_admin(self) -> bool:
         return self.role.name == UserRole.ADMIN.name
-    
+
     def get_full_name(self):
         if self.first_name and self.last_name:
             return f"{self.first_name} {self.last_name}"
@@ -82,7 +93,7 @@ class Transcription(Base):
     error_message = Column(Text, nullable=True)
 
     # Временные метки
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
     completed_at = Column(DateTime, nullable=True)
 
     # Связи
@@ -102,25 +113,25 @@ class Transcription(Base):
 class AdminLog(Base):
     """Модель логов действий администратора"""
     __tablename__ = 'admin_logs'
-    
+
     id = Column(Integer, primary_key=True)
     admin_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
     action = Column(String(100), nullable=False)  # block_user, unblock_user, etc.
     target_user_id = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
     # Связи
     admin = relationship("User", back_populates="admin_logs")
-    
+
     def __repr__(self):
         return f"<AdminLog(id={self.id}, action={self.action})>"
 
 class BotStatistics(Base):
     """Модель статистики бота"""
     __tablename__ = 'bot_statistics'
-    
+
     id = Column(Integer, primary_key=True)
     date = Column(DateTime, nullable=False, index=True)  # дата статистики
     total_users = Column(Integer, default=0, nullable=False)
@@ -130,8 +141,8 @@ class BotStatistics(Base):
     failed_transcriptions = Column(Integer, default=0, nullable=False)
     total_processing_time = Column(Integer, default=0, nullable=False)  # в секундах
     avg_processing_time = Column(Integer, default=0, nullable=False)  # в секундах
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
     def __repr__(self):
         return f"<BotStatistics(date={self.date}, total_users={self.total_users})>"
 

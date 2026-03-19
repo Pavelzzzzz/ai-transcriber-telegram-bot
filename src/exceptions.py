@@ -1,9 +1,9 @@
 """Custom exceptions for AI Transcriber Bot"""
 
 import logging
-from enum import Enum
-from typing import Optional, Dict, Any
 from datetime import datetime
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,14 @@ class ErrorSeverity(Enum):
 
 class BotError(Exception):
     """Базовый класс для всех ошибок бота"""
-    
+
     def __init__(
-        self, 
-        message: str, 
-        error_code: Optional[str] = None,
+        self,
+        message: str,
+        error_code: str | None = None,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-        user_id: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None,
+        user_id: int | None = None,
+        context: dict[str, Any] | None = None,
         is_critical: bool = False
     ):
         super().__init__(message)
@@ -34,8 +34,8 @@ class BotError(Exception):
         self.context = context or {}
         self.timestamp = datetime.utcnow()
         self.is_critical = is_critical
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Преобразование ошибки в словарь для логирования"""
         return {
             "error_type": self.__class__.__name__,
@@ -50,8 +50,8 @@ class BotError(Exception):
 
 class ValidationError(BotError):
     """Ошибка валидации данных"""
-    
-    def __init__(self, message: str, field: Optional[str] = None, **kwargs):
+
+    def __init__(self, message: str, field: str | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="VALIDATION_ERROR",
@@ -63,8 +63,8 @@ class ValidationError(BotError):
 
 class FileProcessingError(BotError):
     """Ошибка обработки файлов"""
-    
-    def __init__(self, message: str, file_path: Optional[str] = None, **kwargs):
+
+    def __init__(self, message: str, file_path: str | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="FILE_PROCESSING_ERROR",
@@ -76,7 +76,7 @@ class FileProcessingError(BotError):
 
 class AudioProcessingError(FileProcessingError):
     """Ошибка обработки аудио"""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(
             message=message,
@@ -87,7 +87,7 @@ class AudioProcessingError(FileProcessingError):
 
 class ImageProcessingError(FileProcessingError):
     """Ошибка обработки изображений"""
-    
+
     def __init__(self, message: str, **kwargs):
         super().__init__(
             message=message,
@@ -98,8 +98,8 @@ class ImageProcessingError(FileProcessingError):
 
 class DatabaseError(BotError):
     """Ошибка базы данных"""
-    
-    def __init__(self, message: str, query: Optional[str] = None, **kwargs):
+
+    def __init__(self, message: str, query: str | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="DATABASE_ERROR",
@@ -112,8 +112,8 @@ class DatabaseError(BotError):
 
 class ExternalServiceError(BotError):
     """Ошибка внешнего сервиса"""
-    
-    def __init__(self, message: str, service_name: Optional[str] = None, **kwargs):
+
+    def __init__(self, message: str, service_name: str | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="EXTERNAL_SERVICE_ERROR",
@@ -125,8 +125,8 @@ class ExternalServiceError(BotError):
 
 class RateLimitError(BotError):
     """Превышен лимит запросов"""
-    
-    def __init__(self, message: str, limit: Optional[int] = None, **kwargs):
+
+    def __init__(self, message: str, limit: int | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="RATE_LIMIT_ERROR",
@@ -138,8 +138,8 @@ class RateLimitError(BotError):
 
 class ConfigurationError(BotError):
     """Ошибка конфигурации"""
-    
-    def __init__(self, message: str, config_key: Optional[str] = None, **kwargs):
+
+    def __init__(self, message: str, config_key: str | None = None, **kwargs):
         super().__init__(
             message=message,
             error_code="CONFIGURATION_ERROR",
@@ -152,13 +152,13 @@ class ConfigurationError(BotError):
 
 class ErrorHandler:
     """Универсальный обработчик ошибок"""
-    
+
     @staticmethod
     def log_error(
         error: Exception,
-        update: Optional[Any] = None,
-        context: Optional[Any] = None,
-        additional_context: Optional[Dict[str, Any]] = None
+        update: Any | None = None,
+        context: Any | None = None,
+        additional_context: dict[str, Any] | None = None
     ):
         """Логирование ошибок с детализацией"""
         error_data = {
@@ -168,29 +168,29 @@ class ErrorHandler:
             'timestamp': datetime.now().isoformat(),
             'additional_data': additional_context or {}
         }
-        
+
         # Определение уровня логирования
         log_level = logging.ERROR
         if isinstance(error, BotError):
             log_level = logging.WARNING if error.is_critical else logging.ERROR
-        
+
         # Форматируем сообщение с данными
         message = f"[{error_data['error_type']}] {error_data['error_message']}"
         if error_data['update_id']:
             message += f" (Update: {error_data['update_id']})"
-        
+
         logger.log(log_level, message)
-    
+
     @staticmethod
     def handle_telegram_error(
-        error: Exception, 
-        update, 
+        error: Exception,
+        update,
         context,
         user_message: str = "❌ Произошла ошибка. Попробуйте позже."
     ) -> None:
         """Обработка ошибок Telegram с уведомлением пользователя"""
         ErrorHandler.log_error(error, update, context)
-        
+
         try:
             if hasattr(update, 'message') and update.message:
                 update.message.reply_text(user_message)
@@ -201,33 +201,33 @@ class ErrorHandler:
                     logger.warning("Failed to answer callback query")
         except Exception as e:
             logger.error(f"Error handling Telegram error: {e}")
-    
+
     @staticmethod
     def handle_database_error(
-        error: Exception, 
+        error: Exception,
         operation: str,
-        query: Optional[str] = None
+        query: str | None = None
     ):
         """Обработка ошибок базы данных"""
         error_message = f"Database error during {operation}"
         if query:
             error_message += f" (Query: {query[:50]}...)"
-        
+
         logger.error(f"{error_message}: {error}")
-    
+
     @staticmethod
     def handle_file_error(
-        error: Exception, 
+        error: Exception,
         operation: str,
-        file_path: Optional[str] = None
+        file_path: str | None = None
     ):
         """Обработка файловых ошибок"""
         error_message = f"File {operation} failed"
         if file_path:
             error_message += f" (File: {file_path})"
-        
+
         logger.error(f"{error_message}: {error}")
-    
+
     @staticmethod
     def create_validation_error(
         field: str,
@@ -237,7 +237,7 @@ class ErrorHandler:
         """Создание ошибки валидации"""
         message = f"Invalid {field}: {value} (expected {expected_type})"
         return ValidationError(message, field=field)
-    
+
     @staticmethod
     def create_rate_limit_error(
         user_id: int,
@@ -247,15 +247,15 @@ class ErrorHandler:
         """Создание ошибки превышения лимита"""
         message = f"Rate limit exceeded for user {user_id}"
         return RateLimitError(message, limit=limit)
-    
+
     @staticmethod
     def log_transcription(
         user_id: int,
         operation: str,
         processing_time: int,
         input_text: str,
-        output_audio_path: Optional[str] = None,
-        error_message: Optional[str] = None
+        output_audio_path: str | None = None,
+        error_message: str | None = None
     ):
         """Логирование операций транскрибации"""
         if error_message:
@@ -265,20 +265,20 @@ class ErrorHandler:
                 f"Transcription completed for user {user_id}: {operation} "
                 f"in {processing_time}s (text length: {len(input_text)})"
             )
-    
+
     @staticmethod
     def log_operation(
         operation: str,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         status: str = "started",
-        details: Optional[Dict[str, Any]] = None
+        details: dict[str, Any] | None = None
     ):
         """Логирование операций"""
         message = f"Operation {operation} {status}"
         if user_id:
             message += f" (user: {user_id})"
-        
+
         if details:
             message += f" - {details}"
-        
+
         logger.info(message)

@@ -4,8 +4,8 @@ Custom exceptions for AI Transcriber Bot with type safety
 
 import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any
 
 
 class ErrorSeverity(Enum):
@@ -20,14 +20,14 @@ class BotError(Exception):
     """
     Base class for all bot errors with proper typing and structured information
     """
-    
+
     def __init__(
-        self, 
-        message: str, 
-        error_code: Optional[str] = None,
+        self,
+        message: str,
+        error_code: str | None = None,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
-        user_id: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None,
+        user_id: int | None = None,
+        context: dict[str, Any] | None = None,
         is_critical: bool = False
     ):
         super().__init__(message)
@@ -38,8 +38,8 @@ class BotError(Exception):
         self.context = context or {}
         self.timestamp = datetime.now()
         self.is_critical = is_critical
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert error to dictionary for logging/serialization"""
         return {
             'message': self.message,
@@ -54,12 +54,12 @@ class BotError(Exception):
 
 class ValidationError(BotError):
     """Error in data validation with field information"""
-    
+
     def __init__(
-        self, 
-        message: str, 
-        field: Optional[str] = None,
-        value: Optional[Any] = None,
+        self,
+        message: str,
+        field: str | None = None,
+        value: Any | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -67,7 +67,7 @@ class ValidationError(BotError):
             context['field'] = field
         if value is not None:
             context['value'] = str(value)[:100]  # Limit value length
-            
+
         super().__init__(
             message=message,
             error_code="VALIDATION_ERROR",
@@ -81,13 +81,13 @@ class ValidationError(BotError):
 
 class ProcessingError(BotError):
     """Error in data processing (OCR, transcription, TTS, etc.)"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        processing_type: Optional[str] = None,
-        file_path: Optional[str] = None,
-        input_data: Optional[str] = None,
+        processing_type: str | None = None,
+        file_path: str | None = None,
+        input_data: str | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -97,7 +97,7 @@ class ProcessingError(BotError):
             context['file_path'] = file_path
         if input_data:
             context['input_data'] = input_data[:200]  # Limit input data length
-            
+
         super().__init__(
             message=message,
             error_code="PROCESSING_ERROR",
@@ -112,13 +112,13 @@ class ProcessingError(BotError):
 
 class ExternalServiceError(BotError):
     """Error with external services (Telegram API, AI models, etc.)"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        service_name: Optional[str] = None,
-        status_code: Optional[int] = None,
-        response_data: Optional[Dict[str, Any]] = None,
+        service_name: str | None = None,
+        status_code: int | None = None,
+        response_data: dict[str, Any] | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -128,9 +128,9 @@ class ExternalServiceError(BotError):
             context['status_code'] = status_code
         if response_data:
             context['response_data'] = response_data
-            
+
         severity = ErrorSeverity.HIGH if status_code and status_code >= 500 else ErrorSeverity.MEDIUM
-        
+
         super().__init__(
             message=message,
             error_code="EXTERNAL_SERVICE_ERROR",
@@ -145,13 +145,13 @@ class ExternalServiceError(BotError):
 
 class DatabaseError(BotError):
     """Database related errors"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        operation: Optional[str] = None,
-        table: Optional[str] = None,
-        query: Optional[str] = None,
+        operation: str | None = None,
+        table: str | None = None,
+        query: str | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -161,7 +161,7 @@ class DatabaseError(BotError):
             context['table'] = table
         if query:
             context['query'] = query[:200]  # Limit query length
-            
+
         super().__init__(
             message=message,
             error_code="DATABASE_ERROR",
@@ -177,12 +177,12 @@ class DatabaseError(BotError):
 
 class ConfigurationError(BotError):
     """Configuration errors"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        config_key: Optional[str] = None,
-        config_value: Optional[Any] = None,
+        config_key: str | None = None,
+        config_value: Any | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -190,7 +190,7 @@ class ConfigurationError(BotError):
             context['config_key'] = config_key
         if config_value is not None:
             context['config_value'] = str(config_value)
-            
+
         super().__init__(
             message=message,
             error_code="CONFIGURATION_ERROR",
@@ -205,13 +205,13 @@ class ConfigurationError(BotError):
 
 class SecurityError(BotError):
     """Security-related errors"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        user_id: Optional[int] = None,
-        ip_address: Optional[str] = None,
-        action: Optional[str] = None,
+        user_id: int | None = None,
+        ip_address: str | None = None,
+        action: str | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -219,7 +219,7 @@ class SecurityError(BotError):
             context['ip_address'] = ip_address
         if action:
             context['action'] = action
-            
+
         super().__init__(
             message=message,
             error_code="SECURITY_ERROR",
@@ -234,14 +234,14 @@ class SecurityError(BotError):
 
 class RateLimitError(BotError):
     """Rate limiting errors"""
-    
+
     def __init__(
-        self, 
+        self,
         message: str,
-        user_id: Optional[int] = None,
-        limit_type: Optional[str] = None,
-        current_count: Optional[int] = None,
-        limit: Optional[int] = None,
+        user_id: int | None = None,
+        limit_type: str | None = None,
+        current_count: int | None = None,
+        limit: int | None = None,
         **kwargs
     ):
         context = kwargs.get('context', {})
@@ -251,7 +251,7 @@ class RateLimitError(BotError):
             context['current_count'] = current_count
         if limit is not None:
             context['limit'] = limit
-            
+
         super().__init__(
             message=message,
             error_code="RATE_LIMIT_ERROR",
@@ -269,15 +269,15 @@ class ErrorHandler:
     """
     Centralized error handler with structured logging
     """
-    
+
     def __init__(self, logger_name: str = __name__):
         self.logger = logging.getLogger(logger_name)
-    
+
     def handle_error(
-        self, 
-        error: Exception, 
-        user_id: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None
+        self,
+        error: Exception,
+        user_id: int | None = None,
+        context: dict[str, Any] | None = None
     ) -> BotError:
         """
         Convert any exception to a BotError with proper logging
@@ -294,10 +294,10 @@ class ErrorHandler:
                 user_id=user_id,
                 context=context or {}
             )
-        
+
         # Log the error with full details
         error_data = bot_error.to_dict()
-        
+
         if bot_error.severity == ErrorSeverity.CRITICAL:
             self.logger.critical(f"Critical error: {error_data}", exc_info=True)
         elif bot_error.severity == ErrorSeverity.HIGH:
@@ -306,9 +306,9 @@ class ErrorHandler:
             self.logger.warning(f"Medium severity error: {error_data}")
         else:
             self.logger.info(f"Low severity error: {error_data}")
-        
+
         return bot_error
-    
+
     def create_response_message(self, error: BotError) -> str:
         """
         Create user-friendly error message
@@ -324,7 +324,7 @@ class ErrorHandler:
         elif isinstance(error, SecurityError):
             return f"🔒 Доступ запрещен: {error.message}"
         else:
-            return f"❌ Произошла ошибка. Попробуйте позже."
+            return "❌ Произошла ошибка. Попробуйте позже."
 
 
 # Global error handler instance

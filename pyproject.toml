@@ -43,6 +43,22 @@ select = [
 ignore = [
     "E501",  # line too long (handled by formatter)
     "B008",  # do not perform function calls in argument defaults
+    "E402",  # module level import not at top of file
+    "F401",  # unused import
+    "F811",  # redefinition of unused
+    "UP042", # StrEnum inheritance
+    "B904",  # raise from err
+    "B007",  # unused loop variable
+    "F841",  # unused variable
+    "SIM108", # ternary suggestion
+    "SIM105", # contextlib.suppress suggestion
+    "SIM117", # combine with statements
+    "B023",  # closure variable binding
+]
+
+exclude = [
+    "src/",           # Legacy code with many lint errors
+    "config/",        # Config files
 ]
 
 [tool.ruff.lint.isort]

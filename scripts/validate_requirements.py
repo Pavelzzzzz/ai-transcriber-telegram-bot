@@ -7,7 +7,6 @@ This script checks:
 2. Required packages (sqlalchemy, etc.) are present in services that import them
 """
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -56,11 +55,11 @@ CRITICAL_PACKAGES = {
 def check_requirements_exists():
     """Check that all services have requirements.txt files."""
     errors = []
-    
+
     for service, req_file in REQUIREMENTS_FILES.items():
         if not req_file.exists():
             errors.append(f"Missing requirements.txt: {req_file}")
-    
+
     return errors
 
 
@@ -68,7 +67,7 @@ def get_installed_packages(req_file: Path) -> set:
     """Parse requirements.txt and return set of package names."""
     if not req_file.exists():
         return set()
-    
+
     packages = set()
     with open(req_file) as f:
         for line in f:
@@ -82,14 +81,14 @@ def get_installed_packages(req_file: Path) -> set:
 def get_service_imports(service_dir: Path) -> set:
     """Parse all Python files in a service and extract imports."""
     imports = set()
-    
+
     for py_file in service_dir.rglob("*.py"):
         if "test" in py_file.name or "__pycache__" in str(py_file):
             continue
         try:
             with open(py_file) as f:
                 content = f.read()
-            
+
             import_pattern = r'^(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_]*)'
             for match in re.finditer(import_pattern, content, re.MULTILINE):
                 module = match.group(1)
@@ -97,27 +96,27 @@ def get_service_imports(service_dir: Path) -> set:
                     imports.add(module)
         except Exception:
             pass
-    
+
     return imports
 
 
 def check_critical_packages():
     """Check that critical packages are in the right requirements.txt files."""
     errors = []
-    
+
     for service, req_file in REQUIREMENTS_FILES.items():
         if not req_file.exists():
             continue
-        
+
         packages = get_installed_packages(req_file)
-        
+
         service_dir = SERVICES_DIR / service
         imports = get_service_imports(service_dir)
-        
+
         service_common_dir = service_dir.parent / "common"
         if service_common_dir.exists():
             imports.update(get_service_imports(service_common_dir))
-        
+
         package_mapping = {
             'sqlalchemy': 'sqlalchemy',
             'sqlalchemy': 'sqlalchemy',
@@ -131,7 +130,7 @@ def check_critical_packages():
             'PIL': 'Pillow',
             'pillow': 'Pillow',
         }
-        
+
         for imp in imports:
             normalized_imp = imp.lower()
             if normalized_imp in package_mapping:
@@ -141,33 +140,33 @@ def check_critical_packages():
                     errors.append(
                         f"{service}: missing '{pkg}' (imported as '{imp}')"
                     )
-    
+
     return errors
 
 
 def check_dockerfile_paths():
     """Check that Dockerfiles correctly reference their requirements.txt files."""
     errors = []
-    
+
     for service, dockerfile in DOCKERFILES.items():
         if not dockerfile.exists():
             continue
-            
+
         with open(dockerfile) as f:
             content = f.read()
-        
+
         expected_path = f"services/{service}/requirements.txt"
         if expected_path not in content:
             errors.append(f"{service}: Dockerfile doesn't reference {expected_path}")
-    
+
     return errors
 
 
 def main():
     all_errors = []
-    
+
     print("Checking requirements.txt files...")
-    
+
     errors = check_requirements_exists()
     if errors:
         all_errors.extend(errors)
@@ -176,7 +175,7 @@ def main():
             print(f"    - {e}")
     else:
         print("  OK: All services have requirements.txt")
-    
+
     print("\nChecking critical packages...")
     errors = check_critical_packages()
     if errors:
@@ -186,7 +185,7 @@ def main():
             print(f"    - {e}")
     else:
         print("  OK: All critical packages present")
-    
+
     print("\nChecking Dockerfile paths...")
     errors = check_dockerfile_paths()
     if errors:
@@ -196,7 +195,7 @@ def main():
             print(f"    - {e}")
     else:
         print("  OK: Dockerfile paths correct")
-    
+
     print()
     if all_errors:
         print(f"FAILED: {len(all_errors)} error(s) found")

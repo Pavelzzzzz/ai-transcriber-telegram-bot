@@ -1,9 +1,9 @@
-from dataclasses import dataclass, field, asdict
-from datetime import datetime
-from typing import Optional, Dict, Any, List
-from enum import Enum
 import json
 import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 
 class TaskType(str, Enum):
@@ -62,25 +62,25 @@ class TaskMessage:
     chat_id: int
     timestamp: datetime
     file_path: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     def __post_init__(self):
         if not self.task_id:
             self.task_id = str(uuid.uuid4())
         if not self.timestamp:
             self.timestamp = datetime.now()
-    
+
     def to_json(self) -> str:
         data = asdict(self)
-        data['task_type'] = self.task_type.value
-        data['timestamp'] = self.timestamp.isoformat()
+        data["task_type"] = self.task_type.value
+        data["timestamp"] = self.timestamp.isoformat()
         return json.dumps(data, ensure_ascii=False)
-    
+
     @classmethod
-    def from_json(cls, json_str: str) -> 'TaskMessage':
+    def from_json(cls, json_str: str) -> "TaskMessage":
         data = json.loads(json_str)
-        data['task_type'] = TaskType(data['task_type'])
-        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        data["task_type"] = TaskType(data["task_type"])
+        data["timestamp"] = datetime.fromisoformat(data["timestamp"])
         return cls(**data)
 
 
@@ -89,19 +89,19 @@ class ResultMessage:
     task_id: str
     status: TaskStatus
     result_type: str
-    result_data: Dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    result_data: dict[str, Any] = field(default_factory=dict)
+    error: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
-    
+
     def to_json(self) -> str:
         data = asdict(self)
-        data['status'] = self.status.value
-        data['timestamp'] = self.timestamp.isoformat()
+        data["status"] = self.status.value
+        data["timestamp"] = self.timestamp.isoformat()
         return json.dumps(data, ensure_ascii=False)
-    
+
     @classmethod
-    def from_json(cls, json_str: str) -> 'ResultMessage':
+    def from_json(cls, json_str: str) -> "ResultMessage":
         data = json.loads(json_str)
-        data['status'] = TaskStatus(data['status'])
-        data['timestamp'] = datetime.fromisoformat(data['timestamp'])
+        data["status"] = TaskStatus(data["status"])
+        data["timestamp"] = datetime.fromisoformat(data["timestamp"])
         return cls(**data)

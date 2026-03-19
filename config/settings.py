@@ -3,7 +3,6 @@ Configuration management for AI Transcriber Bot
 """
 
 import os
-from typing import List, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,7 +26,7 @@ class AIModelsConfig:
     """AI models configuration"""
     whisper_model: str = field(default_factory=lambda: os.getenv('WHISPER_MODEL', 'tiny'))
     whisper_device: str = field(default_factory=lambda: os.getenv('WHISPER_DEVICE', 'cpu'))
-    ocr_languages: List[str] = field(default_factory=lambda: 
+    ocr_languages: list[str] = field(default_factory=lambda:
         os.getenv('OCR_LANGUAGES', 'rus,eng').split(',') if os.getenv('OCR_LANGUAGES') else ['rus', 'eng']
     )
     tts_language: str = field(default_factory=lambda: os.getenv('TTS_LANGUAGE', 'ru'))
@@ -37,10 +36,10 @@ class AIModelsConfig:
 class SecurityConfig:
     """Security configuration"""
     telegram_token: str = field(default_factory=lambda: os.getenv('TELEGRAM_BOT_TOKEN', ''))
-    admin_usernames: List[str] = field(default_factory=lambda: 
+    admin_usernames: list[str] = field(default_factory=lambda:
         [name.strip() for name in os.getenv('ADMIN_USERNAMES', '').split(',') if name.strip()]
     )
-    admin_ids: List[int] = field(default_factory=lambda: 
+    admin_ids: list[int] = field(default_factory=lambda:
         [int(id_) for id_ in os.getenv('ADMIN_IDS', '').split(',') if id_.strip().isdigit()]
     )
     max_file_size_mb: int = field(default_factory=lambda: int(os.getenv('MAX_FILE_SIZE_MB', '20')))
@@ -53,10 +52,10 @@ class LoggingConfig:
     """Logging configuration"""
     level: str = field(default_factory=lambda: os.getenv('LOG_LEVEL', 'INFO'))
     format: str = field(default_factory=lambda: os.getenv(
-        'LOG_FORMAT', 
+        'LOG_FORMAT',
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     ))
-    file_path: Optional[str] = field(default_factory=lambda: os.getenv('LOG_FILE_PATH'))
+    file_path: str | None = field(default_factory=lambda: os.getenv('LOG_FILE_PATH'))
     max_file_size: int = field(default_factory=lambda: int(os.getenv('LOG_MAX_FILE_SIZE', '10485760')))  # 10MB
     backup_count: int = field(default_factory=lambda: int(os.getenv('LOG_BACKUP_COUNT', '5')))
 
@@ -77,14 +76,14 @@ class PathConfig:
     downloads_dir: Path = field(default_factory=lambda: Path(os.getenv('DOWNLOADS_DIR', './downloads')))
     logs_dir: Path = field(default_factory=lambda: Path(os.getenv('LOGS_DIR', './logs')))
     temp_dir: Path = field(default_factory=lambda: Path(os.getenv('TEMP_DIR', './temp')))
-    
+
     def __post_init__(self):
         """Ensure all paths are absolute and directories exist"""
         self.base_dir = Path(self.base_dir).resolve()
         self.downloads_dir = self.base_dir / self.downloads_dir.relative_to(self.base_dir) if not self.downloads_dir.is_absolute() else self.downloads_dir
         self.logs_dir = self.base_dir / self.logs_dir.relative_to(self.base_dir) if not self.logs_dir.is_absolute() else self.logs_dir
         self.temp_dir = self.base_dir / self.temp_dir.relative_to(self.base_dir) if not self.temp_dir.is_absolute() else self.temp_dir
-        
+
         # Create directories if they don't exist
         for dir_path in [self.downloads_dir, self.logs_dir, self.temp_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
@@ -96,7 +95,7 @@ class BotConfig:
     name: str = field(default='AI Transcriber Bot')
     version: str = field(default='2.0.0')
     description: str = field(default='AI-powered Telegram bot for text transcription and processing')
-    
+
     # Sub-configurations
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     ai_models: AIModelsConfig = field(default_factory=AIModelsConfig)
@@ -104,31 +103,31 @@ class BotConfig:
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     paths: PathConfig = field(default_factory=PathConfig)
-    
-    def validate(self) -> List[str]:
+
+    def validate(self) -> list[str]:
         """Validate configuration and return list of errors"""
         errors = []
-        
+
         # Validate security
         if not self.security.telegram_token:
             errors.append("TELEGRAM_BOT_TOKEN is required")
-        
+
         if not self.security.admin_usernames and not self.security.admin_ids:
             errors.append("At least one admin (ADMIN_USERNAMES or ADMIN_IDS) is required")
-        
+
         # Validate paths
         if not self.paths.base_dir.exists():
             errors.append(f"Base directory does not exist: {self.paths.base_dir}")
-        
+
         # Validate performance
         if self.performance.worker_threads < 1:
             errors.append("WORKER_THREADS must be at least 1")
-        
+
         if self.security.max_file_size_mb < 1:
             errors.append("MAX_FILE_SIZE_MB must be at least 1")
-        
+
         return errors
-    
+
     @classmethod
     def from_env(cls) -> 'BotConfig':
         """Create configuration from environment variables"""

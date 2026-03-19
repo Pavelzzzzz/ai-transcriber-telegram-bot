@@ -3,15 +3,16 @@ Command handlers for AI Transcriber Bot with improved architecture
 """
 
 import logging
-from typing import Optional
 from datetime import datetime
 
-from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from config import BotConfig
-from .exceptions import BotError, error_handler
+
 from ..services.user_service import UserService
+from .exceptions import error_handler
+
 # from ...utils.multilingual_processor import MultilingualTextProcessor  # Temporarily disabled
 
 logger = logging.getLogger(__name__)
@@ -21,13 +22,13 @@ class CommandHandlers:
     """
     Handles all command messages (/start, /help, /mode, /status)
     """
-    
+
     def __init__(self, config: BotConfig, user_service: UserService):
         self.config = config
         self.user_service = user_service
         self.text_processor = None
-    
-    async def _safe_reply(self, update: Update, text: str, parse_mode: Optional[str] = None) -> bool:
+
+    async def _safe_reply(self, update: Update, text: str, parse_mode: str | None = None) -> bool:
         """Safely reply to a message with error handling"""
         try:
             if update and update.message:
@@ -36,21 +37,21 @@ class CommandHandlers:
         except Exception as e:
             logger.error(f"Error replying to message: {e}")
         return False
-    
-    def _is_admin(self, user_id: int, username: Optional[str] = None) -> bool:
+
+    def _is_admin(self, user_id: int, username: str | None = None) -> bool:
         """Check if user is admin with proper validation"""
         if username and username.lower() in [name.lower() for name in self.config.security.admin_usernames]:
             return True
         if user_id in self.config.security.admin_ids:
             return True
         return False
-    
+
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start command with improved UX"""
         try:
             if not update.effective_user:
                 return
-            
+
             # Get or create user
             user = await self.user_service.get_or_create_user(
                 telegram_id=update.effective_user.id,
@@ -58,13 +59,13 @@ class CommandHandlers:
                 first_name=update.effective_user.first_name,
                 last_name=update.effective_user.last_name
             )
-            
+
             # Check if admin
             is_admin_user = self._is_admin(
-                update.effective_user.id, 
+                update.effective_user.id,
                 update.effective_user.username
             )
-            
+
             # Build message based on user type
             if is_admin_user:
                 admin_commands = """
@@ -75,7 +76,7 @@ class CommandHandlers:
 /logs - Системные логи"""
             else:
                 admin_commands = ""
-            
+
             message = f"""
 🎉 **AI Транскрибатор v{self.config.version}**
 
@@ -103,31 +104,31 @@ class CommandHandlers:
 ✅ Расширенная статистика и рекомендации
 ✅ Улучшенная обработка ошибок
 """
-            
+
             await self._safe_reply(update, message.strip())
-            
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка запуска. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка запуска. Попробуйте позже.")
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /help command with detailed information"""
         try:
             if not update.effective_user:
                 return
-            
+
             is_admin_user = self._is_admin(
                 update.effective_user.id,
                 update.effective_user.username
             )
-            
+
             admin_help = """
 🔐 **Админ команды:**
 /admin - Панель администратора
 /stats - Статистика пользователей
 /users - Список пользователей
 /logs - Системные логи""" if is_admin_user else ""
-            
+
             message = f"""
 📖 **Подробная справка - AI Транскрибатор v{self.config.version}**
 
@@ -178,21 +179,21 @@ class CommandHandlers:
 ✅ Расширенная статистика
 ✅ Ускоренная обработка
 """
-            
+
             await self._safe_reply(update, message.strip())
-            
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка. Попробуйте позже.")
+
     async def mode_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /mode command with improved UX"""
         try:
             if not update.effective_user:
                 return
-                
+
             user_id = update.effective_user.id
-            
+
             # Get current user mode
             user = await self.user_service.get_user_by_telegram_id(user_id)
             current_mode = user.current_mode if user else 'img_to_text'
@@ -212,15 +213,15 @@ class CommandHandlers:
 
             mode_names = {
                 'img_to_text': '📸 Изображение → Текст',
-                'audio_to_text': '🎤 Аудио → Текст', 
+                'audio_to_text': '🎤 Аудио → Текст',
                 'text_to_audio': '🔊 Текст → Аудио',
                 'text_to_text': '💬 Текст → Ответ (Интеллектуальная корректура)'
             }
 
-            message = f"🎛️ **Выберите режим работы**\n\n"
+            message = "🎛️ **Выберите режим работы**\n\n"
             message += f"🎯 **Текущий режим:** {mode_names.get(current_mode, 'Не выбран')}\n\n"
             message += "📸 **Изображение → Текст:** OCR распознавание текста с фото\n"
-            message += "🎤 **Аудио → Текст:** Транскрибация речи в текст (99 языков)\n" 
+            message += "🎤 **Аудио → Текст:** Транскрибация речи в текст (99 языков)\n"
             message += "🔊 **Текст → Аудио:** Синтез речи из текста\n"
             message += "💬 **Текст → Ответ:** Интеллектуальная коррекция текста (RU/EN)\n\n"
             message += "💡 **Новый режим 💬 поддерживает:**\n"
@@ -230,38 +231,38 @@ class CommandHandlers:
             message += "• Умные рекомендации по улучшению текста"
 
             await self._safe_reply(update, message.strip())
-            
+
             if update.message:
                 await update.message.reply_text(
                     "Выберите режим:",
                     reply_markup=reply_markup
                 )
-                
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка выбора режима. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка выбора режима. Попробуйте позже.")
+
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command with comprehensive information"""
         try:
             if not update.effective_user:
                 return
-            
+
             user_id = update.effective_user.id
             user = await self.user_service.get_user_by_telegram_id(user_id)
-            
+
             # Get user statistics
             stats = await self.user_service.get_user_stats(user_id) if user else {}
-            
+
             # Get current mode name
             current_mode = user.current_mode if user else 'img_to_text'
             mode_names = {
                 'img_to_text': '📸 Изображение → Текст',
                 'audio_to_text': '🎤 Аудио → Текст',
-                'text_to_audio': '🔊 Текст → Аудио', 
+                'text_to_audio': '🔊 Текст → Аудио',
                 'text_to_text': '💬 Текст → Ответ'
             }
-            
+
             message = f"""
 🤖 **Статус AI Транскрибатора v{self.config.version}**
 ✅ Бот активен и готов к работе
@@ -292,29 +293,29 @@ class CommandHandlers:
 
 💡 **Совет:** Используйте /mode для смены режима работы
 """
-            
+
             await self._safe_reply(update, message.strip())
-            
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка получения статуса. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка получения статуса. Попробуйте позже.")
+
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /stats command with global statistics"""
         try:
             if not update.effective_user:
                 return
-            
+
             if not self._is_admin(
                 update.effective_user.id,
                 update.effective_user.username
             ):
                 await self._safe_reply(update, "❌ Доступ запрещен. Требуются права администратора.")
                 return
-            
+
             # Get global statistics
             stats = await self.user_service.get_global_stats()
-            
+
             message = f"""
 📊 **Глобальная статистика AI Транскрибатора:**
 
@@ -334,7 +335,7 @@ class CommandHandlers:
 
 🎯 **Использование режимов:**
 """
-            
+
             # Add mode distribution
             for mode, count in stats.get('modes', {}).items():
                 mode_names = {
@@ -344,79 +345,79 @@ class CommandHandlers:
                     'text_to_text': '💬 Текст → Ответ'
                 }
                 message += f"• {mode_names.get(mode, mode)}: {count} пользователей\n"
-            
+
             message += f"""
 ⏰ **Время:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 🔥 **Бот активен и обрабатывает запросы!**
 """
-            
+
             await self._safe_reply(update, message.strip())
-                
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка получения статистики. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка получения статистики. Попробуйте позже.")
+
     async def users_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /users command with user list"""
         try:
             if not update.effective_user:
                 return
-            
+
             if not self._is_admin(
                 update.effective_user.id,
                 update.effective_user.username
             ):
                 await self._safe_reply(update, "❌ Доступ запрещен. Требуются права администратора.")
                 return
-            
+
             # Get recent users
             users = await self.user_service.get_all_users(limit=20)
-            
+
             if not users:
                 await self._safe_reply(update, "📊 Пользователи не найдены.")
                 return
-            
+
             message = f"👥 **Список пользователей (первые {len(users)}):**\n\n"
-            
+
             for user in users:
                 status_emoji = "🟢" if not user.is_blocked else "🚫"
                 admin_emoji = "👑" if user.role == 'ADMIN' else "👤"
-                
+
                 last_activity = user.last_activity.strftime('%d.%m.%Y %H:%M') if user.last_activity else "Никогда"
-                
+
                 message += f"{status_emoji} {admin_emoji} **{user.get_full_name() or 'Unknown'}**\n"
                 message += f"🆔 {user.telegram_id}\n"
                 message += f"📅 Регистрация: {user.created_at.strftime('%d.%m.%Y')}\n"
                 message += f"🕐 Последняя активность: {last_activity}\n"
                 message += f"🎯 Текущий режим: {user.current_mode or 'Не выбран'}\n"
                 message += f"{'─' * 30}\n"
-            
+
             await self._safe_reply(update, message.strip())
-                
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка получения списка пользователей. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка получения списка пользователей. Попробуйте позже.")
+
     async def logs_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /logs command with system logs"""
         try:
             if not update.effective_user:
                 return
-            
+
             if not self._is_admin(
                 update.effective_user.id,
                 update.effective_user.username
             ):
                 await self._safe_reply(update, "❌ Доступ запрещен. Требуются права администратора.")
                 return
-            
-            message = f"""
+
+            message = """
 📝 **Системные логи AI Транскрибатора:**
 
 📂 **Доступные файлы логов:**
 """
-            
+
             # Check log files
             log_files = []
             try:
@@ -425,10 +426,10 @@ class CommandHandlers:
                     for log_file in log_dir.glob("*.log"):
                         size = log_file.stat().st_size
                         log_files.append(f"• {log_file.name} ({size} байт)")
-                        
+
                         # Add recent lines
                         try:
-                            with open(log_file, 'r', encoding='utf-8') as f:
+                            with open(log_file, encoding='utf-8') as f:
                                 lines = f.readlines()
                                 if lines:
                                     recent_lines = lines[-5:]  # Last 5 lines
@@ -442,10 +443,10 @@ class CommandHandlers:
                             pass
             except Exception as e:
                 logger.error(f"Error reading log files: {e}")
-            
+
             if not log_files:
                 message += "• Логи не найдены"
-            
+
             message += f"""
 ⚙️ **Конфигурация логирования:**
 • Уровень: {self.config.logging.level}
@@ -465,36 +466,36 @@ class CommandHandlers:
 • При необходимости можно очистить старые логи
 • Для отладки используйте уровень DEBUG в LOG_LEVEL
 """
-            
+
             await self._safe_reply(update, message.strip())
-                
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка получения логов. Попробуйте позже.")
+            await self._safe_reply(update, "❌ Ошибка получения логов. Попробуйте позже.")
 
 
 class AdminHandlers:
     """
     Administrative command handlers
     """
-    
+
     def __init__(self, config: BotConfig, user_service: UserService):
         self.config = config
         self.user_service = user_service
-    
+
     async def admin_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /admin command"""
         try:
             if not update.effective_user:
                 return
-                
+
             if not self._is_admin(
                 update.effective_user.id,
                 update.effective_user.username
             ):
                 await self._safe_reply(update, "❌ Доступ запрещен. Требуются права администратора.")
                 return
-            
+
             keyboard = [
                 [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
                 [InlineKeyboardButton("👥 Пользователи", callback_data="admin_users")],
@@ -503,19 +504,19 @@ class AdminHandlers:
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await self._safe_reply(update, "🛠️ **Панель администратора:**\nВыберите действие:")
-            
+
             if update.message:
                 await update.message.reply_text("Выберите действие:", reply_markup=reply_markup)
-                
+
         except Exception as e:
             error = error_handler.handle_error(e, user_id=update.effective_user.id if update.effective_user else None)
-            await self._safe_reply(update, f"❌ Ошибка панели администратора. Попробуйте позже.")
-    
+            await self._safe_reply(update, "❌ Ошибка панели администратора. Попробуйте позже.")
+
     async def _handle_stats_callback(self, update: Update, query):
         """Handle stats callback"""
         try:
             stats = await self.user_service.get_global_stats()
-            
+
             message = f"""
 📊 **Статистика бота:**
 
@@ -533,54 +534,54 @@ class AdminHandlers:
 
 ⏰ **Время:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
-            
+
             await query.edit_message_text(message)
-            
+
         except Exception as e:
             logger.error(f"Error in stats callback: {e}")
             await query.edit_message_text("❌ Ошибка получения статистики")
-    
+
     async def _handle_users_callback(self, update: Update, query):
         """Handle users callback"""
         try:
             users = await self.user_service.get_all_users(limit=15)
-            
+
             if not users:
                 await query.edit_message_text("📊 Пользователи не найдены")
                 return
-            
+
             message = f"👥 **Пользователи (первые {len(users)}):**\n\n"
-            
+
             for user in users:
                 status_emoji = "🟢" if not user.is_blocked else "🚫"
                 admin_emoji = "👑" if user.role == 'ADMIN' else "👤"
-                
+
                 last_activity = user.last_activity.strftime('%d.%m.%Y %H:%M') if user.last_activity else "Никогда"
-                
+
                 message += f"{status_emoji} {admin_emoji} **{user.get_full_name() or 'Unknown'}**\n"
                 message += f"🆔 {user.telegram_id}\n"
                 message += f"🕐 {last_activity}\n"
                 message += f"{'─' * 25}\n"
-            
+
             await query.edit_message_text(message)
-            
+
         except Exception as e:
             logger.error(f"Error in users callback: {e}")
             await query.edit_message_text("❌ Ошибка получения пользователей")
-    
+
     async def _handle_logs_callback(self, update: Update, query):
         """Handle logs callback"""
         try:
             log_dir = self.config.paths.logs_dir
             log_files = []
-            
+
             if log_dir.exists():
                 for log_file in log_dir.glob("*.log"):
                     size = log_file.stat().st_size
                     log_files.append(f"• {log_file.name} ({size} байт)")
-            
-            message = f"📝 **Логи системы:**\n\n"
-            
+
+            message = "📝 **Логи системы:**\n\n"
+
             if log_files:
                 message += "\n".join(log_files)
                 message += f"\n\n📄 **Всего файлов:** {len(log_files)}"
@@ -588,9 +589,9 @@ class AdminHandlers:
             else:
                 message += "• Логи не найдены"
                 message += f"\n📂 **Директория:** {log_dir}"
-            
+
             await query.edit_message_text(message)
-            
+
         except Exception as e:
             logger.error(f"Error in logs callback: {e}")
             await query.edit_message_text("❌ Ошибка получения логов")
@@ -600,12 +601,12 @@ class CallbackHandlers:
     """
     Handles callback queries from inline keyboards
     """
-    
+
     def __init__(self, config: BotConfig, user_service: UserService):
         self.config = config
         self.user_service = user_service
-    
-    async def _safe_reply(self, update: Update, text: str, parse_mode: Optional[str] = None) -> bool:
+
+    async def _safe_reply(self, update: Update, text: str, parse_mode: str | None = None) -> bool:
         """Safely edit message with error handling"""
         try:
             if update.callback_query:
@@ -614,22 +615,22 @@ class CallbackHandlers:
         except Exception as e:
             logger.error(f"Error editing callback message: {e}")
         return False
-    
-    def _is_admin(self, user_id: int, username: Optional[str] = None) -> bool:
+
+    def _is_admin(self, user_id: int, username: str | None = None) -> bool:
         """Check if user is admin"""
         if username and username.lower() in [name.lower() for name in self.config.security.admin_usernames]:
             return True
         if user_id in self.config.security.admin_ids:
             return True
         return False
-    
+
     async def callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle callback queries with type safety"""
         try:
             query = update.callback_query
             if not query or not update.effective_user:
                 return
-                
+
             await query.answer()
             user_id = update.effective_user.id
             action = query.data
@@ -641,28 +642,28 @@ class CallbackHandlers:
                     if len(parts) != 3 or parts[0] != "mode":
                         await query.edit_message_text("❌ Неверный формат callback")
                         return
-                    
+
                     mode_type = parts[1]
                     callback_user_id_part = parts[2]
-                    
+
                     if not callback_user_id_part.isdigit():
                         await query.edit_message_text("❌ Неверный ID пользователя")
                         return
-                    
+
                     callback_user_id = int(callback_user_id_part)
                     if callback_user_id != user_id:
                         await query.edit_message_text("❌ Ошибка доступа")
                         return
-                    
+
                     valid_modes = ['img_to_text', 'audio_to_text', 'text_to_audio', 'text_to_text']
-                    
+
                     if mode_type not in valid_modes:
                         await query.edit_message_text("❌ Неизвестный тип режима")
                         return
-                    
+
                     # Update user mode
                     await self.user_service.update_user_mode(user_id, mode_type)
-                    
+
                     mode_names = {
                         'img_to_text': '📸 Изображение → Текст',
                         'audio_to_text': '🎤 Аудио → Текст',
@@ -683,36 +684,36 @@ class CallbackHandlers:
                         f"💡 **Что делать:** {mode_descriptions[mode_type]}\n\n"
                         f"🔄 Сменить режим: /mode"
                     )
-                    
+
                 except (ValueError, IndexError) as e:
                     logger.error(f"Error processing callback: {e}")
                     await query.edit_message_text("❌ Ошибка обработки callback")
-            
+
             # Handle admin callbacks
             elif action in ["admin_stats", "admin_users", "admin_logs"]:
                 try:
                     if not update.effective_user or not self._is_admin(
-                        update.effective_user.id, 
+                        update.effective_user.id,
                         update.effective_user.username
                     ):
                         await query.edit_message_text("❌ Доступ запрещен")
                         return
-                    
+
                     # Delegate to admin handlers
                     from .admin_handlers import AdminHandlers
                     admin_handlers = AdminHandlers(self.config, self.user_service)
-                    
+
                     if action == "admin_stats":
                         await admin_handlers._handle_stats_callback(update, query)
                     elif action == "admin_users":
                         await admin_handlers._handle_users_callback(update, query)
                     elif action == "admin_logs":
                         await admin_handlers._handle_logs_callback(update, query)
-                        
+
                 except Exception as e:
                     logger.error(f"Error in admin callback: {e}")
                     await query.edit_message_text("❌ Ошибка обработки команды")
-                    
+
         except Exception as e:
             logger.error(f"Error in callback handler: {e}")
             if update.callback_query:

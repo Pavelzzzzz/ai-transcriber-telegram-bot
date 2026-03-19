@@ -2,11 +2,13 @@
 
 import logging
 import os
-from contextlib import contextmanager, asynccontextmanager
-from sqlalchemy import create_engine, event, exc
-from sqlalchemy.orm import sessionmaker, Session, scoped_session
+from collections.abc import AsyncGenerator, Generator
+from contextlib import asynccontextmanager, contextmanager
+
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool, StaticPool
-from typing import Generator, Optional, AsyncGenerator
+
 from database.models import Base
 from src.exceptions import DatabaseError, ErrorHandler
 
@@ -21,17 +23,17 @@ POOL_PRE_PING = True
 
 class DatabaseManager:
     """Управление подключениями к базе данных с connection pooling"""
-    
+
     def __init__(self):
         self.engine = None
         self.session_factory = None
         self._initialize_engine()
-    
+
     def _initialize_engine(self):
         """Инициализация SQLAlchemy engine с connection pooling"""
         try:
             database_url = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
-            
+
             # Настройки engine в зависимости от типа базы данных
             if database_url.startswith('sqlite'):
                 # SQLite с StaticPool для потоко-безопасности
@@ -57,7 +59,7 @@ class DatabaseManager:
                     pool_reset_on_return='commit',
                     echo=os.getenv('DEBUG', 'False').lower() == 'true'
                 )
-            
+
             # Создание session factory
             self.session_factory = sessionmaker(
                 bind=self.engine,
@@ -65,43 +67,43 @@ class DatabaseManager:
                 autoflush=False,
                 expire_on_commit=False
             )
-            
+
             # Добавление event handlers для логирования
             self._add_event_listeners()
-            
+
             logger.info("Database engine initialized with connection pooling")
-            
+
         except Exception as e:
             logger.error(f"Failed to initialize database engine: {e}")
             raise DatabaseError(
                 message="Database initialization failed",
                 context={"database_url": database_url, "error": str(e)}
             )
-    
+
     def _add_event_listeners(self):
         """Добавление event listeners для мониторинга"""
-        
+
         @event.listens_for(self.engine, "connect")
         def receive_connect(dbapi_connection, connection_record):
             logger.debug("Database connection established")
-        
+
         @event.listens_for(self.engine, "checkout")
         def receive_checkout(dbapi_connection, connection_record, connection_proxy):
             logger.debug("Connection checked out from pool")
-        
+
         @event.listens_for(self.engine, "checkin")
         def receive_checkin(dbapi_connection, connection_record):
             logger.debug("Connection checked in to pool")
-        
+
         @event.listens_for(self.engine, "close")
         def receive_close(dbapi_connection, connection_record):
             logger.debug("Database connection closed")
-    
+
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
         """Получение сессии с автоматическим управлением"""
         session = scoped_session(self.session_factory)
-        
+
         try:
             yield session
             session.commit()
@@ -115,12 +117,12 @@ class DatabaseManager:
             )
         finally:
             session.close()
-    
+
     @asynccontextmanager
     async def get_async_session(self) -> AsyncGenerator[Session, None]:
         """Асинхронное получение сессии"""
         session = scoped_session(self.session_factory)
-        
+
         try:
             yield session
             session.commit()
@@ -134,7 +136,7 @@ class DatabaseManager:
             )
         finally:
             session.close()
-    
+
     def create_tables(self):
         """Создание всех таблиц"""
         try:
@@ -146,11 +148,11 @@ class DatabaseManager:
                 message="Failed to create database tables",
                 context={"error": str(e)}
             )
-    
+
     def get_engine_info(self) -> dict:
         """Получение информации о состоянии engine"""
         pool = self.engine.pool
-        
+
         if hasattr(pool, 'size'):
             return {
                 "pool_type": type(pool).__name__,
@@ -161,7 +163,7 @@ class DatabaseManager:
                 "invalid": getattr(pool, 'invalid', 0)
             }
         return {"pool_type": "N/A"}
-    
+
     def close_all_connections(self):
         """Закрытие всех соединений с базой данных"""
         try:

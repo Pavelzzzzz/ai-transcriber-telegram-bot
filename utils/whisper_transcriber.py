@@ -1,10 +1,11 @@
-import whisper
-import torch
-from gtts import gTTS
 import logging
 import os
 from datetime import datetime
-from typing import Optional, Any, Dict, List, Union
+from typing import Any
+
+import torch
+import whisper
+from gtts import gTTS
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,9 @@ class WhisperTranscriber:
         """Инициализация Whisper модели"""
         self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model: Optional[Any] = None
+        self.model: Any | None = None
         self._load_model()
-        
+
     def _load_model(self) -> None:
         """Загрузка Whisper модели"""
         try:
@@ -32,7 +33,7 @@ class WhisperTranscriber:
         except Exception as e:
             logger.error(f"Ошибка при загрузке Whisper модели: {e}")
             raise
-            
+
     def text_to_speech(self, text: str, user_id: int) -> str:
         """Преобразование текста в речь с использованием gTTS"""
         try:
@@ -58,7 +59,7 @@ class WhisperTranscriber:
         except Exception as e:
             logger.error(f"Ошибка при создании аудио: {e}")
             raise
-            
+
     async def transcribe_audio(self, audio_path: str, language: str = "ru") -> dict:
         """Транскрибация аудио в текст"""
         try:
@@ -66,16 +67,16 @@ class WhisperTranscriber:
 
             if not self.model:
                 self._load_model()
-                
+
             if not self.model:
                 raise ExternalServiceError("Не удалось загрузить Whisper модель", service_name="Whisper")
-                
+
             result = self.model.transcribe(audio_path, language=language)
- 
+
             transcribed_text = result.get("text", "")
             if isinstance(transcribed_text, str):
                 transcribed_text = transcribed_text.strip()
- 
+
             # Получение длительности аудио
             audio_duration = 0.0
             if "segments" in result and result["segments"]:

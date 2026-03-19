@@ -1,4 +1,4 @@
-from .processor import TTSProcessor
 from .kafka_consumer import TTSKafkaConsumer
+from .processor import TTSProcessor
 
-__all__ = ['TTSProcessor', 'TTSKafkaConsumer']
+__all__ = ["TTSProcessor", "TTSKafkaConsumer"]

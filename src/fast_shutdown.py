@@ -2,7 +2,6 @@ import asyncio
 import logging
 import signal
 from contextlib import asynccontextmanager
-from typing import Optional, Set
 
 from src.database_manager import db_manager
 from src.resource_manager import resource_manager
@@ -15,7 +14,7 @@ class FastShutdownManager:
 
     def __init__(self):
         self._shutdown_requested = False
-        self._active_tasks: Set[asyncio.Task] = set()
+        self._active_tasks: set[asyncio.Task] = set()
         self._shutdown_callbacks = []
         self._shutdown_timeout = 15  # Максимально 15 секунд
 

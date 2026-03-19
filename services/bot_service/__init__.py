@@ -1,4 +1,4 @@
-from .kafka_producer import TaskProducer
 from .kafka_consumer import ResultConsumer
+from .kafka_producer import TaskProducer
 
-__all__ = ['TaskProducer', 'ResultConsumer']
+__all__ = ["TaskProducer", "ResultConsumer"]

@@ -1,4 +1,4 @@
-from .processor import TranscriptionProcessor
 from .kafka_consumer import TranscriptionKafkaConsumer
+from .processor import TranscriptionProcessor
 
-__all__ = ['TranscriptionProcessor', 'TranscriptionKafkaConsumer']
+__all__ = ["TranscriptionProcessor", "TranscriptionKafkaConsumer"]

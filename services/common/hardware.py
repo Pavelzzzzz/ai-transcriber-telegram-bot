@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +82,7 @@ VARIATION_LABELS = {
 def get_vram_gb() -> float:
     try:
         import torch
+
         if not torch.cuda.is_available():
             return 0
         return torch.cuda.get_device_properties(0).total_memory / (1024**3)
@@ -90,17 +90,17 @@ def get_vram_gb() -> float:
         return 0
 
 
-def get_available_models() -> List[str]:
+def get_available_models() -> list[str]:
     vram = get_vram_gb()
     available = []
-    
+
     for model_id, config in MODELS_CONFIG.items():
         if vram >= config["min_vram_gb"]:
             available.append(model_id)
-    
+
     if not available:
         available = ["sd15"]
-    
+
     logger.info(f"Available models for {vram:.1f}GB VRAM: {available}")
     return available
 
@@ -109,11 +109,11 @@ def is_model_available(model: str) -> bool:
     return model in get_available_models()
 
 
-def get_model_info(model: str) -> Optional[Dict]:
+def get_model_info(model: str) -> dict | None:
     return MODELS_CONFIG.get(model)
 
 
-def get_style_info(style: str) -> Optional[Dict]:
+def get_style_info(style: str) -> dict | None:
     return STYLES_CONFIG.get(style)
 
 
@@ -125,14 +125,14 @@ def get_model_display_name(model: str) -> str:
     info = MODELS_CONFIG.get(model)
     if not info:
         return model
-    
+
     if not is_model_available(model):
         return f"{info['name']} ⚠️"
-    return info['name']
+    return info["name"]
 
 
 def get_style_display_name(style: str) -> str:
     info = STYLES_CONFIG.get(style)
     if not info:
         return style
-    return info['name']
+    return info["name"]
