@@ -42,7 +42,7 @@ jobs:
         run: python scripts/validate_requirements.py
 
   test:
-    name: Test
+    name: Test Unit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,11 +54,31 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -e ".[dev]" || true
-          pip install pytest pytest-asyncio httpx
+          pip install pytest pytest-asyncio httpx pytest-cov python-telegram-bot sqlalchemy kafka-python psycopg2-binary
       
-      - name: Run tests
-        run: pytest tests/ -v --ignore=tests/e2e || true
+      - name: Run unit tests
+        run: pytest services/common/ services/bot_service/tests/ -v --tb=short
+
+  test-integration:
+    name: Test Integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install Docker
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio httpx pytest-cov python-telegram-bot sqlalchemy kafka-python psycopg2-binary
+      
+      - name: Run integration tests
+        run: pytest services/common/ services/bot_service/tests/ --run-integration -v --tb=short
 
   docker-build:
     name: Docker Build
