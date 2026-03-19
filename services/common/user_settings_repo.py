@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from sqlalchemy import BigInteger, Column, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .database import Base, get_db
@@ -18,6 +18,7 @@ class UserSettings(Base):
     aspect_ratio = Column(String(10), default="1:1")
     num_variations = Column(Integer, default=1)
     negative_prompt = Column(Text, nullable=True)
+    noise_reduction = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -29,6 +30,7 @@ class UserSettings(Base):
             "aspect_ratio": self.aspect_ratio,
             "num_variations": self.num_variations,
             "negative_prompt": self.negative_prompt,
+            "noise_reduction": self.noise_reduction,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -80,6 +82,7 @@ def update_user_settings(user_id: int, **kwargs) -> UserSettings | None:
         "aspect_ratio",
         "num_variations",
         "negative_prompt",
+        "noise_reduction",
     ]
     update_data = {k: v for k, v in kwargs.items() if k in valid_fields}
 
@@ -113,6 +116,7 @@ def reset_user_settings(user_id: int) -> bool:
                 settings.aspect_ratio = "1:1"
                 settings.num_variations = 1
                 settings.negative_prompt = None
+                settings.noise_reduction = True
                 db.commit()
             return True
     except Exception as e:

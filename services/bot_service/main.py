@@ -402,11 +402,22 @@ class TelegramBotService:
             await voice_file.download_to_drive(audio_path)
 
             if self.producer:
+                try:
+                    settings = get_or_create_user_settings(user_id)
+                    noise_reduction = settings.noise_reduction if settings else True
+                except Exception as e:
+                    logger.warning(f"DB not available, using default noise_reduction: {e}")
+                    noise_reduction = True
+
                 task = self.producer.create_transcribe_task(
                     user_id=user_id,
                     chat_id=chat_id,
                     file_path=audio_path,
-                    metadata={"message_id": update.message.message_id},
+                    metadata={
+                        "message_id": update.message.message_id,
+                        "language": "ru",
+                        "noise_reduction": noise_reduction,
+                    },
                 )
                 self.producer.send_task(task)
                 self.pending_tasks[task.task_id] = {

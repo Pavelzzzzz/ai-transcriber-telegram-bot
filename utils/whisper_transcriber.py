@@ -18,7 +18,7 @@ class ExternalServiceError(Exception):
 
 
 class WhisperTranscriber:
-    def __init__(self, model_name="base"):
+    def __init__(self, model_name="small"):
         """Инициализация Whisper модели"""
         self.model_name = model_name
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -63,7 +63,9 @@ class WhisperTranscriber:
             logger.error(f"Ошибка при создании аудио: {e}")
             raise
 
-    async def transcribe_audio(self, audio_path: str, language: str = "ru") -> dict:
+    async def transcribe_audio(
+        self, audio_path: str, language: str = "ru", beam_size: int = 5, best_of: int = 5
+    ) -> dict:
         """Транскрибация аудио в текст"""
         try:
             logger.info(f"Транскрибация аудио: {audio_path}")
@@ -76,7 +78,14 @@ class WhisperTranscriber:
                     "Не удалось загрузить Whisper модель", service_name="Whisper"
                 )
 
-            result = self.model.transcribe(audio_path, language=language)
+            result = self.model.transcribe(
+                audio_path,
+                language=language,
+                beam_size=beam_size,
+                best_of=best_of,
+                fp16=self.device == "cuda",
+                condition_on_previous_text=True,
+            )
 
             transcribed_text = result.get("text", "")
             if isinstance(transcribed_text, str):

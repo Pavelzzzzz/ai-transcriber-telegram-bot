@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 class TranscriptionKafkaConsumer:
     def __init__(
-        self, config, result_sender: Callable[[ResultMessage], None], model_name: str = "base"
+        self, config, result_sender: Callable[[ResultMessage], None], model_name: str = "small"
     ):
         self.config = config
         self.result_sender = result_sender
@@ -42,7 +42,10 @@ class TranscriptionKafkaConsumer:
     async def _process_task(self, task: TaskMessage) -> ResultMessage:
         try:
             language = task.metadata.get("language", "ru")
-            result = await self.processor.transcribe_audio(task.file_path, language)
+            noise_reduction = task.metadata.get("noise_reduction", True)
+            result = await self.processor.transcribe_audio(
+                task.file_path, language, noise_reduction=noise_reduction
+            )
 
             return ResultMessage(
                 task_id=task.task_id,

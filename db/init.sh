@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
     aspect_ratio VARCHAR(10) DEFAULT '1:1',
     num_variations INT DEFAULT 1,
     negative_prompt TEXT,
+    noise_reduction BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

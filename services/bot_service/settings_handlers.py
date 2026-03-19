@@ -35,6 +35,7 @@ def get_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
     current_style = settings.image_style or ""
     current_aspect = settings.aspect_ratio or "1:1"
     current_variations = settings.num_variations or 1
+    current_noise = settings.noise_reduction if settings else True
 
     model_name = get_model_display_name(current_model)
     style_name = get_style_display_name(current_style) if current_style else "Без стиля"
@@ -55,6 +56,12 @@ def get_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 f"📝 Негативный промпт: {'Задан' if settings.negative_prompt else 'Не задан'}",
                 callback_data="settings:negative",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                f"🔊 Шумоподавление: {'Вкл' if current_noise else 'Выкл'}",
+                callback_data="settings:noise",
             ),
         ],
         [
@@ -85,6 +92,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_aspect = settings.aspect_ratio if settings else "1:1"
     current_variations = settings.num_variations if settings else 1
     current_negative = settings.negative_prompt if settings else ""
+    current_noise = settings.noise_reduction if settings else True
 
     available_models = get_available_models()
     model_name = (
@@ -106,6 +114,7 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • 📐 Размер: {aspect_name}
 • 🔢 Вариаций: {current_variations}
 • 📝 Негативный промпт: {"Задан" if current_negative else "Не задан"}
+• 🔊 Шумоподавление: {"Включено" if current_noise else "Выключено"}
 
 ━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -157,6 +166,10 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "settings:negative":
         await ask_negative_prompt(query, user_id)
+        return
+
+    if data == "settings:noise":
+        await handle_settings_noise_callback(query, user_id)
         return
 
 
@@ -375,6 +388,24 @@ async def handle_settings_variations_callback(update: Update, context: ContextTy
         await query.edit_message_text(
             f"✅ **Количество вариаций изменено на:** {variations}\n\n"
             f"Теперь будет генерироваться {variations} изображений."
+        )
+    except Exception as e:
+        logger.warning(f"DB not available: {e}")
+        await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
+
+
+async def handle_settings_noise_callback(query, user_id: int):
+    try:
+        settings = get_or_create_user_settings(user_id)
+        current_value = settings.noise_reduction if settings else True
+        new_value = not current_value
+
+        update_user_settings(user_id, noise_reduction=new_value)
+
+        await query.answer()
+        await query.edit_message_text(
+            f"✅ **Шумоподавление:** {'Включено' if new_value else 'Выключено'}\n\n"
+            f"Будет {'применяться' if new_value else 'пропускаться'} при транскрибации голоса."
         )
     except Exception as e:
         logger.warning(f"DB not available: {e}")
