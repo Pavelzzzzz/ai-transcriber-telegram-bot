@@ -18,13 +18,16 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
 
+
 class UserRole(enum.Enum):
     USER = "user"
     ADMIN = "admin"
 
+
 class User(Base):
     """Модель пользователя"""
-    __tablename__ = 'users'
+
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, unique=True, nullable=False, index=True)
@@ -38,7 +41,9 @@ class User(Base):
     last_activity = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
 
     # Связи
-    transcriptions = relationship("Transcription", back_populates="user", cascade="all, delete-orphan")
+    transcriptions = relationship(
+        "Transcription", back_populates="user", cascade="all, delete-orphan"
+    )
     admin_logs = relationship("AdminLog", back_populates="admin", cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -57,19 +62,25 @@ class User(Base):
         else:
             return f"User #{self.telegram_id}"
 
+
 class TranscriptionType(enum.Enum):
     """Типы транскрипации"""
+
     IMAGE_TO_TEXT = "image_to_text"  # Изображение -> Текст
     AUDIO_TO_TEXT = "audio_to_text"  # Аудио -> Текст
     TEXT_TO_AUDIO = "text_to_audio"  # Текст -> Аудио
 
+
 class Transcription(Base):
     """Модель транскрипации (двунаправленная)"""
-    __tablename__ = 'transcriptions'
+
+    __tablename__ = "transcriptions"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    transcription_type = Column(Enum(TranscriptionType), nullable=False, default=TranscriptionType.TEXT_TO_AUDIO)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    transcription_type = Column(
+        Enum(TranscriptionType), nullable=False, default=TranscriptionType.TEXT_TO_AUDIO
+    )
 
     # Для TEXT_TO_AUDIO: входной текст
     # Для AUDIO_TO_TEXT: распознанный текст
@@ -89,7 +100,9 @@ class Transcription(Base):
     audio_duration = Column(Float, nullable=True)  # длительность аудио в секундах
 
     # Статус и ошибки
-    status = Column(String(20), default='pending', nullable=False)  # pending, processing, completed, failed
+    status = Column(
+        String(20), default="pending", nullable=False
+    )  # pending, processing, completed, failed
     error_message = Column(Text, nullable=True)
 
     # Временные метки
@@ -110,12 +123,14 @@ class Transcription(Base):
         """Проверяет, является ли транскрипация преобразованием аудио в текст"""
         return self.transcription_type == TranscriptionType.AUDIO_TO_TEXT
 
+
 class AdminLog(Base):
     """Модель логов действий администратора"""
-    __tablename__ = 'admin_logs'
+
+    __tablename__ = "admin_logs"
 
     id = Column(Integer, primary_key=True)
-    admin_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     action = Column(String(100), nullable=False)  # block_user, unblock_user, etc.
     target_user_id = Column(Integer, nullable=True)
     description = Column(Text, nullable=True)
@@ -128,9 +143,11 @@ class AdminLog(Base):
     def __repr__(self):
         return f"<AdminLog(id={self.id}, action={self.action})>"
 
+
 class BotStatistics(Base):
     """Модель статистики бота"""
-    __tablename__ = 'bot_statistics'
+
+    __tablename__ = "bot_statistics"
 
     id = Column(Integer, primary_key=True)
     date = Column(DateTime, nullable=False, index=True)  # дата статистики
@@ -146,10 +163,12 @@ class BotStatistics(Base):
     def __repr__(self):
         return f"<BotStatistics(date={self.date}, total_users={self.total_users})>"
 
+
 # Создание соединения с базой данных
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///bot.db')
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///bot.db")
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     """Получение сессии базы данных"""
@@ -158,6 +177,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 def create_tables():
     """Создание таблиц"""

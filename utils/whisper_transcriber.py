@@ -16,6 +16,7 @@ class ExternalServiceError(Exception):
         self.service_name = service_name
         super().__init__(self.message)
 
+
 class WhisperTranscriber:
     def __init__(self, model_name="base"):
         """Инициализация Whisper модели"""
@@ -40,11 +41,13 @@ class WhisperTranscriber:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             audio_path = f"downloads/audio_{user_id}_{timestamp}.mp3"
 
-            logger.info(f"Создание аудио для пользователя {user_id} с текстом длиной {len(text)} символов")
+            logger.info(
+                f"Создание аудио для пользователя {user_id} с текстом длиной {len(text)} символов"
+            )
 
             # Используем gTTS для генерации речи
             # lang='ru' - русский язык, slow=False - нормальная скорость
-            tts = gTTS(text=text, lang='ru', slow=False)
+            tts = gTTS(text=text, lang="ru", slow=False)
 
             # Сохраняем в MP3 файл
             tts.save(audio_path)
@@ -69,7 +72,9 @@ class WhisperTranscriber:
                 self._load_model()
 
             if not self.model:
-                raise ExternalServiceError("Не удалось загрузить Whisper модель", service_name="Whisper")
+                raise ExternalServiceError(
+                    "Не удалось загрузить Whisper модель", service_name="Whisper"
+                )
 
             result = self.model.transcribe(audio_path, language=language)
 
@@ -85,13 +90,11 @@ class WhisperTranscriber:
                 if isinstance(last_segment, dict) and last_segment.get("end"):
                     audio_duration = float(last_segment["end"])
 
-            logger.info(f"Транскрибация завершена, длина текста: {len(transcribed_text)}, длительность: {audio_duration}")
+            logger.info(
+                f"Транскрибация завершена, длина текста: {len(transcribed_text)}, длительность: {audio_duration}"
+            )
 
-            return {
-                "text": transcribed_text,
-                "duration": audio_duration,
-                "language": language
-            }
+            return {"text": transcribed_text, "duration": audio_duration, "language": language}
 
         except Exception as e:
             logger.error(f"Ошибка при транскрибации аудио: {e}")

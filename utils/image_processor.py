@@ -6,10 +6,11 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+
 class ImageProcessor:
     def __init__(self):
         """Инициализация обработчика изображений"""
-        self.supported_formats = ['.jpg', '.jpeg', '.png', '.webp']
+        self.supported_formats = [".jpg", ".jpeg", ".png", ".webp"]
 
         try:
             pytesseract.get_tesseract_version()
@@ -32,16 +33,16 @@ class ImageProcessor:
 
             image = Image.open(image_path)
 
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
+            if image.mode != "RGB":
+                image = image.convert("RGB")
 
             image = image.resize((image.width * 2, image.height * 2), Image.Resampling.LANCZOS)
 
-            custom_config = r'--oem 3 --psm 6 -l rus+eng'
+            custom_config = r"--oem 3 --psm 6 -l rus+eng"
             extracted_text = pytesseract.image_to_string(image, config=custom_config)
 
-            cleaned_text = extracted_text.strip().replace('\n', ' ')
-            cleaned_text = ' '.join(cleaned_text.split())
+            cleaned_text = extracted_text.strip().replace("\n", " ")
+            cleaned_text = " ".join(cleaned_text.split())
 
             logger.info(f"Текст успешно извлечен, длина: {len(cleaned_text)}")
             return cleaned_text
@@ -55,7 +56,7 @@ class ImageProcessor:
         try:
             from PIL import ImageEnhance, ImageFilter
 
-            image = image.convert('L')
+            image = image.convert("L")
 
             enhancer = ImageEnhance.Contrast(image)
             image = enhancer.enhance(2.0)

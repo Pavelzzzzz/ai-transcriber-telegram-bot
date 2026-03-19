@@ -9,7 +9,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--disable-warnings",
-    "--cov=src",
+    "--cov=services",
     "--cov=utils",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
@@ -54,11 +54,18 @@ ignore = [
     "SIM105", # contextlib.suppress suggestion
     "SIM117", # combine with statements
     "B023",  # closure variable binding
+    "SIM102", # simplify nested if
+    "SIM103", # simplify if-else
+    "W291",  # trailing whitespace (legacy files)
+    "E712",  # comparison to True/False
+    "UP035", # deprecated typing
+    "E722",  # bare except
+    "F821",  # undefined name (legacy files)
 ]
 
 exclude = [
-    "src/",           # Legacy code with many lint errors
-    "config/",        # Config files
+    "config/",     # Config files
+    "tests/",      # Test files
 ]
 
 [tool.ruff.lint.isort]

@@ -32,7 +32,13 @@ REQUIREMENTS_FILES = {
 PACKAGE_IMPORTS = {
     "sqlalchemy": ["ocr_service", "tts_service", "image_gen_service"],
     "gtts": ["bot_service", "tts_service"],
-    "kafka-python": ["bot_service", "ocr_service", "tts_service", "transcription_service", "image_gen_service"],
+    "kafka-python": [
+        "bot_service",
+        "ocr_service",
+        "tts_service",
+        "transcription_service",
+        "image_gen_service",
+    ],
     "torch": ["transcription_service", "image_gen_service"],
     "openai-whisper": ["transcription_service"],
     "diffusers": ["image_gen_service"],
@@ -89,10 +95,19 @@ def get_service_imports(service_dir: Path) -> set:
             with open(py_file) as f:
                 content = f.read()
 
-            import_pattern = r'^(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_]*)'
+            import_pattern = r"^(?:from|import)\s+([a-zA-Z_][a-zA-Z0-9_]*)"
             for match in re.finditer(import_pattern, content, re.MULTILINE):
                 module = match.group(1)
-                if module not in ('os', 'sys', 're', 'datetime', 'typing', 'logging', 'json', 'uuid'):
+                if module not in (
+                    "os",
+                    "sys",
+                    "re",
+                    "datetime",
+                    "typing",
+                    "logging",
+                    "json",
+                    "uuid",
+                ):
                     imports.add(module)
         except Exception:
             pass
@@ -118,28 +133,25 @@ def check_critical_packages():
             imports.update(get_service_imports(service_common_dir))
 
         package_mapping = {
-            'sqlalchemy': 'sqlalchemy',
-            'sqlalchemy': 'sqlalchemy',
-            'gtts': 'gtts',
-            'kafka': 'kafka-python',
-            'torch': 'torch',
-            'whisper': 'openai-whisper',
-            'diffusers': 'diffusers',
-            'transformers': 'transformers',
-            'pytesseract': 'pytesseract',
-            'PIL': 'Pillow',
-            'pillow': 'Pillow',
+            "sqlalchemy": "sqlalchemy",
+            "gtts": "gtts",
+            "kafka": "kafka-python",
+            "torch": "torch",
+            "whisper": "openai-whisper",
+            "diffusers": "diffusers",
+            "transformers": "transformers",
+            "pytesseract": "pytesseract",
+            "PIL": "Pillow",
+            "pillow": "Pillow",
         }
 
         for imp in imports:
             normalized_imp = imp.lower()
             if normalized_imp in package_mapping:
                 pkg = package_mapping[normalized_imp]
-                pkg_name = pkg.replace('-', '_').lower()
+                pkg_name = pkg.replace("-", "_").lower()
                 if pkg_name not in packages and pkg.lower() not in packages:
-                    errors.append(
-                        f"{service}: missing '{pkg}' (imported as '{imp}')"
-                    )
+                    errors.append(f"{service}: missing '{pkg}' (imported as '{imp}')")
 
     return errors
 
