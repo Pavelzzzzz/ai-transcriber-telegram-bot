@@ -204,7 +204,10 @@ class ImageGenerationProcessor:
         if style and style in STYLES_CONFIG:
             style_config = STYLES_CONFIG[style]
             if style_config.get("model_id"):
-                negative_prompt = negative_prompt or style_config.get("negative_prompt", "")
+                model = style_config["model_id"]
+                style_negative = style_config.get("negative_prompt", "")
+                if style_negative:
+                    negative_prompt = f"{negative_prompt}, {style_negative}" if negative_prompt else style_negative
 
         self._validate_prompt(prompt)
 
@@ -224,6 +227,7 @@ class ImageGenerationProcessor:
                     "num_inference_steps": num_inference_steps,
                     "guidance_scale": guidance_scale,
                     "negative_prompt": negative_prompt if negative_prompt else None,
+                    "num_images_per_prompt": num_variations,
                 }
 
                 if seed is not None:
@@ -249,7 +253,7 @@ class ImageGenerationProcessor:
 
                 result = pipeline(**generate_kwargs)
 
-                generated_images = result.images[:num_variations]
+                generated_images = result.images
                 output_paths = []
 
                 os.makedirs("/app/downloads", exist_ok=True)

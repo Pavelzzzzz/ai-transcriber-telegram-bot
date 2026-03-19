@@ -140,5 +140,102 @@ class TestImageGenerationProcessorConfig:
         assert ImageGenerationProcessor.RETRY_DELAY == 2
 
 
+class TestStyleModelOverride:
+    """Test that style model_id overrides the default model"""
+
+    @pytest.fixture
+    def processor(self):
+        return ImageGenerationProcessor()
+
+    @pytest.mark.asyncio
+    @patch("services.image_gen_service.processor.os.makedirs")
+    async def test_style_overrides_model(self, mock_makedirs, processor):
+        """Test that photorealistic style uses its model_id instead of default"""
+        metadata = {
+            "model": "sd15",
+            "style": "photorealistic",
+        }
+
+        with patch(
+            "services.image_gen_service.processor.get_available_models",
+            return_value=["SG161222/Realistic_Vision_V5.1_noVAE"],
+        ):
+            with patch(
+                "services.image_gen_service.processor.STABLES_DIFFUSION_MODEL_CONFIG",
+                {
+                    "SG161222/Realistic_Vision_V5.1_noVAE": {
+                        "model_id": "SG161222/Realistic_Vision_V5.1_noVAE",
+                        "min_vram_gb": 0,
+                    }
+                },
+            ):
+                with patch(
+                    "services.image_gen_service.processor.ASPECT_RATIO_SIZES", {"1:1": (1024, 1024)}
+                ):
+                    mock_pipeline = Mock()
+                    mock_image = Mock()
+                    mock_result = Mock()
+                    mock_result.images = [mock_image]
+                    mock_pipeline.return_value = mock_result
+
+                    with patch(
+                        "services.image_gen_service.processor.StableDiffusionPipeline"
+                    ) as mock_class:
+                        mock_class.from_pretrained.return_value = mock_pipeline
+                        mock_pipeline.to.return_value = mock_pipeline
+
+                        result = await processor.generate_image("A cat", metadata)
+
+                        mock_class.from_pretrained.assert_called()
+                        call_args = mock_class.from_pretrained.call_args
+                        assert "SG161222/Realistic_Vision_V5.1_noVAE" in str(call_args)
+
+    @pytest.mark.asyncio
+    @patch("services.image_gen_service.processor.os.makedirs")
+    async def test_style_appends_negative_prompt(self, mock_makedirs, processor):
+        """Test that style negative_prompt is appended to user negative_prompt"""
+        metadata = {
+            "model": "sd15",
+            "style": "anime",
+            "negative_prompt": "blurry",
+        }
+
+        with patch(
+            "services.image_gen_service.processor.get_available_models",
+            return_value=["cagliostrolab/animagine-xl-3.1"],
+        ):
+            with patch(
+                "services.image_gen_service.processor.STABLES_DIFFUSION_MODEL_CONFIG",
+                {
+                    "cagliostrolab/animagine-xl-3.1": {
+                        "model_id": "cagliostrolab/animagine-xl-3.1",
+                        "min_vram_gb": 0,
+                    }
+                },
+            ):
+                with patch(
+                    "services.image_gen_service.processor.ASPECT_RATIO_SIZES", {"1:1": (1024, 1024)}
+                ):
+                    mock_pipeline = Mock()
+                    mock_image = Mock()
+                    mock_result = Mock()
+                    mock_result.images = [mock_image]
+                    mock_pipeline.return_value = mock_result
+
+                    with patch(
+                        "services.image_gen_service.processor.StableDiffusionPipeline"
+                    ) as mock_class:
+                        mock_class.from_pretrained.return_value = mock_pipeline
+                        mock_pipeline.to.return_value = mock_pipeline
+
+                        result = await processor.generate_image("A cat", metadata)
+
+                        mock_pipeline.assert_called()
+                        call_kwargs = mock_pipeline.call_args.kwargs
+                        assert "negative_prompt" in call_kwargs
+                        assert "blurry" in call_kwargs["negative_prompt"]
+                        assert "realistic" in call_kwargs["negative_prompt"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
