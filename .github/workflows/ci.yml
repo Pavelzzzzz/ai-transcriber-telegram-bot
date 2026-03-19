@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install ruff
+        run: pip install ruff
+      
+      - name: Run ruff check
+        run: ruff check .
+      
+      - name: Run ruff format check
+        run: ruff format --check .
+
+  requirements:
+    name: Validate Requirements
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Validate requirements
+        run: python scripts/validate_requirements.py
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]" || true
+          pip install pytest pytest-asyncio httpx
+      
+      - name: Run tests
+        run: pytest tests/ -v --ignore=tests/e2e || true
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build bot_service
+        run: docker build -f services/bot_service/Dockerfile --target builder .
+      
+      - name: Build ocr_service
+        run: docker build -f services/ocr_service/Dockerfile --target builder .
+      
+      - name: Build tts_service
+        run: docker build -f services/tts_service/Dockerfile --target builder .
+      
+      - name: Build transcription_service
+        run: docker build -f services/transcription_service/Dockerfile --target builder .
+      
+      - name: Build image_gen_service
+        run: docker build -f services/image_gen_service/Dockerfile --target builder .

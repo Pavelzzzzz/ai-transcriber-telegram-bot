@@ -1,0 +1,37 @@
+# Pre-commit hooks configuration
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: local
+    hooks:
+      - id: validate-requirements
+        name: Validate requirements.txt
+        entry: python scripts/validate_requirements.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: ruff-check
+        name: Ruff check
+        entry: ruff check
+        language: system
+        types: [python]
+        stages: [pre-commit]
+
+      - id: ruff-format
+        name: Ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+        stages: [pre-commit]
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=5000']

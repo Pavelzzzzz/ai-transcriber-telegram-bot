@@ -107,10 +107,19 @@ class ImageGenKafkaConsumer:
             loop.close()
     
     def _cleanup_task(self, task_id: str, future: Future):
-        with self._tasks_lock:
-            if task_id in self._pending_tasks:
-                del self._pending_tasks[task_id]
-        logger.info(f"Task {task_id} removed from pending queue")
+        try:
+            if future.done() and not future.cancelled():
+                result = future.result()
+                if result and self.result_sender:
+                    self.result_sender(result)
+                    logger.info(f"Result sent for task {task_id}")
+        except Exception as e:
+            logger.error(f"Error sending result for task {task_id}: {e}")
+        finally:
+            with self._tasks_lock:
+                if task_id in self._pending_tasks:
+                    del self._pending_tasks[task_id]
+            logger.info(f"Task {task_id} removed from pending queue")
     
     async def _process_task(self, task: TaskMessage) -> ResultMessage:
         try:
