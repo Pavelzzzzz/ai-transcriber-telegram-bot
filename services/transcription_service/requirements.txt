@@ -5,3 +5,4 @@ torchaudio>=2.0.0
 kafka-python>=2.0.2
 tornado>=6.4
 numpy>=1.24.0
+gtts>=2.5.0
