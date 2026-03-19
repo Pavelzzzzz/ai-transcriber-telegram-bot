@@ -107,6 +107,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    volumes:
+      - ./downloads:/app/downloads
 
   transcription-service:
     build:
@@ -126,6 +128,8 @@ services:
     networks:
       - bot-network
     restart: unless-stopped
+    volumes:
+      - ./downloads:/app/downloads
 
   tts-service:
     build:
