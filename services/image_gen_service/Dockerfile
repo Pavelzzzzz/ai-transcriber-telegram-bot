@@ -19,10 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --upgrade pip
 
-# Copy requirements.txt
 COPY requirements.txt /app/requirements.txt
 
-# Install CPU-only PyTorch and all dependencies
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r /app/requirements.txt
 
@@ -36,15 +34,14 @@ ENV GPU_TYPE=${GPU_TYPE}
 
 WORKDIR /app
 
-# Install runtime dependencies based on GPU type
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     ca-certificates \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
@@ -53,5 +50,8 @@ COPY services/ services/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+    CMD curl -f http://localhost:8080/ || exit 1
 
 CMD ["python", "-m", "services.image_gen_service.main"]

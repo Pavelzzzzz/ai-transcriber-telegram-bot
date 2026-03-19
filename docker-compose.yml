@@ -53,13 +53,7 @@ services:
     networks:
       - bot-network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "kafka-broker-api-versions",
-          "--bootstrap-server",
-          "localhost:9092",
-        ]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -102,6 +96,8 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
     networks:
       - bot-network
     restart: unless-stopped
@@ -111,8 +107,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    volumes:
-      - ./downloads:/app/downloads
 
   transcription-service:
     build:
@@ -129,11 +123,17 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
     networks:
       - bot-network
     restart: unless-stopped
-    volumes:
-      - ./downloads:/app/downloads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   tts-service:
     build:
@@ -154,6 +154,12 @@ services:
     networks:
       - bot-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   image-gen-service:
     build:
@@ -182,6 +188,12 @@ services:
     networks:
       - bot-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   bot-network:

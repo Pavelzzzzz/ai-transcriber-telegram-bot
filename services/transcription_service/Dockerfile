@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxext6 \
     libgl1 \
     libglib2.0-0 \
+    curl \
     ca-certificates \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -47,5 +48,8 @@ COPY utils/ utils/
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+    CMD curl -f http://localhost:8003/ || exit 1
 
 CMD ["python", "-m", "services.transcription_service.main"]

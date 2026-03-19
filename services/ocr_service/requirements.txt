@@ -1,0 +1,4 @@
+pytesseract>=0.3.10
+Pillow>=10.2.0
+kafka-python>=2.0.2
+tornado>=6.4
