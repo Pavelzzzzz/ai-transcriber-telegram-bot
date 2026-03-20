@@ -93,7 +93,10 @@ jobs:
         run: docker build -f services/bot_service/Dockerfile --target builder .
       
       - name: Build ocr_service
-        run: docker build -f services/ocr_service/Dockerfile --target builder .
+        run: |
+          docker build -f services/ocr_service/Dockerfile.cpu --target builder .
+          docker build -f services/ocr_service/Dockerfile.nvidia --target builder .
+          docker build -f services/ocr_service/Dockerfile.amd --target builder .
       
       - name: Build tts_service
         run: docker build -f services/tts_service/Dockerfile --target builder .
@@ -103,3 +106,6 @@ jobs:
       
       - name: Build image_gen_service
         run: docker build -f services/image_gen_service/Dockerfile --target builder .
+
+      - name: Build receipt_service
+        run: docker build -f services/receipt_service/Dockerfile --target builder .

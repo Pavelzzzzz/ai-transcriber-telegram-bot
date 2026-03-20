@@ -91,7 +91,10 @@ class TestAudioPreprocessor:
                         with patch("os.path.getsize", return_value=1024):
                             with patch("os.remove"):
                                 result = preprocess_audio(
-                                    temp_audio_file, denoise=False, normalize=False, remove_silence=False
+                                    temp_audio_file,
+                                    denoise=False,
+                                    normalize=False,
+                                    remove_silence=False,
                                 )
 
         assert result == "/tmp/output.wav"
