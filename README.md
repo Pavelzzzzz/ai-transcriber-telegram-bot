@@ -8,17 +8,24 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 
 ### 🎯 Основные возможности
 
-- 📸 **OCR** - Распознавание текста из изображений (Tesseract)
+- 📸 **OCR** - Распознавание текста из изображений (RapidOCR с ONNX Runtime)
+  - Поддержка GPU (NVIDIA, AMD)
+  - Автоматическое препроцессирование изображений ( grayscale, контраст, шумоподавление)
+  - Ленивая инициализация для быстрого старта
 - 🎤 **Транскрибация** - Преобразование голоса в текст (Whisper)
+  - Модель small по умолчанию
+  - Подавление шума с ffmpeg
+  - Параметры beam_size=5, best_of=5
 - 🔊 **TTS** - Синтез речи из текста (gTTS)
 - 🎨 **Генерация изображений** - Текст в изображение (Stable Diffusion XL / FLUX / SD 1.5)
   - Выбор модели: SD 1.5, SDXL, FLUX
-  - Стили: Фотореализм, Аниме, Арт, 3D
-  - Соотношения сторон: 1:1, 16:9, 9:16, 4:3
+  - Стили с автоподстановкой negative prompt: Фотореализм, Аниме, Арт, 3D
+  - Соотношения сторон: 1:1, 16:9, 9:16, 4:3, 3:2, 2:3
   - Количество вариаций: 1-4
   - Negative prompt
 - ⚡ **Масштабируемость** - Независимое масштабирование сервисов
 - 🌍 **Мультиязычность** - Поддержка русского, английского и других языков
+- 🔔 **Уведомления** - Kafka topic для push-уведомлений пользователям
 
 ## 🏗️ Архитектура
 
@@ -32,20 +39,24 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          KAFKA CLUSTER                              │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  │
-│  │ tasks.ocr  │ │tasks.trans- │ │ tasks.tts  │ │tasks.image │  │
-│  │             │ │   cribe    │ │             │ │    _gen    │  │
+│  │ tasks.ocr   │ │tasks.trans- │ │ tasks.tts   │ │tasks.image  │  │
+│  │             │ │   cribe     │ │             │ │    _gen     │  │
 │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘  │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  │
-│  │results.ocr  │ │results.tran│ │results.tts  │ │results.ima-│  │
-│  │             │ │   scribe   │ │             │ │    ge_gen  │  │
+│  │results.ocr  │ │results.tran│ │results.tts  │ │results.ima- │  │
+│  │             │ │   scribe   │ │             │ │    ge_gen   │  │
 │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘  │
+│                               ┌─────────────┐                       │
+│                               │ notifications │                      │
+│                               │  (push/email)  │                      │
+│                               └─────────────┘                       │
 └─────────────────────────────────────────────────────────────────────┘
     │               │               │               │
     ▼               ▼               ▼               ▼
 ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────────┐
 │   OCR    │  │ TRANSCRIBE  │  │   TTS    │  │ IMAGE_GEN   │
 │ Service  │  │  Service    │  │ Service  │  │  Service    │
-│(Tesseract│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │
+│(RapidOCR)│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │
 └──────────┘  └──────────────┘  └──────────┘  └──────────────┘
                                     │
                                     ▼
@@ -65,7 +76,7 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │   │   ├── kafka_consumer.py
 │   │   ├── settings_handlers.py
 │   │   └── tests/
-│   ├── ocr_service/             # OCR (Tesseract)
+│   ├── ocr_service/             # OCR (RapidOCR)
 │   ├── transcription_service/   # Whisper
 │   ├── tts_service/             # gTTS
 │   ├── image_gen_service/       # Stable Diffusion / FLUX
@@ -162,6 +173,16 @@ TTS_LANGUAGE=ru
 | `intel` | Intel встройка/дискретная (по умолчанию) | SD 1.5, SDXL |
 | `nvidia` | NVIDIA GPU (CUDA) | SD 1.5, SDXL, FLUX |
 | `amd` | AMD GPU (ROCm) | SD 1.5, SDXL, FLUX |
+| `cpu` | CPU only | SD 1.5 |
+
+### OCR GPU Конфигурация
+
+| Тип | Описание |
+|------|----------|
+| `nvidia` | NVIDIA GPU (CUDA) - включено |
+| `amd` | AMD GPU (ROCm) - включено |
+| `intel` | Intel GPU - не поддерживается |
+| `cpu` | CPU only (по умолчанию) |
 
 ### Kafka Topics
 
@@ -175,6 +196,7 @@ TTS_LANGUAGE=ru
 | `results.transcribe` | → | bot_service |
 | `results.tts` | → | bot_service |
 | `results.image_gen` | → | bot_service |
+| `notifications` | → | bot_service |
 
 ## 🎮 Использование
 
@@ -208,23 +230,30 @@ TTS_LANGUAGE=ru
 # Установите зависимости
 pip install -r requirements.txt
 
-# Запустите тесты
-pytest services/ -v
+# Запустите unit-тесты
+pytest --ignore=services/transcription_service/ -v
+
+# Запустите все тесты (включая интеграционные)
+pytest --run-integration --ignore=services/transcription_service/ -v
+
+# Запустите линтинг
+ruff check .
+ruff check . --fix  # автоисправление
 ```
 
 ## 🛠️ Технологический стек
 
-- **Python 3.12** - Основной язык
+- **Python 3.12+** - Основной язык
 - **Apache Kafka** - Message broker
-- **PostgreSQL** - База данных (настройки пользователей)
-- **Liquibase** - Миграции БД
+- **PostgreSQL** - База данных (настройки пользователей, init.sh миграции)
 - **python-telegram-bot** - Telegram API
-- **Tesseract OCR** - Распознавание текста
+- **RapidOCR** - Распознавание текста (ONNX Runtime, GPU support)
 - **OpenAI Whisper** - Транскрибация
 - **gTTS** - Синтез речи
 - **Stable Diffusion XL / FLUX** - Генерация изображений
 - **Docker** - Контейнеризация
 - **Multi-stage builds** - Оптимизация образов
+- **ruff** - Линтинг и форматирование
 
 ## 📄 Лицензия
 
