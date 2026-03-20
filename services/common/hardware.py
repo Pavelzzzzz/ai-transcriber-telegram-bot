@@ -41,7 +41,7 @@ STYLES_CONFIG = {
     },
     "art": {
         "name": "Арт",
-        "model_id": "oc蜀黍/Comic-Diffusion",
+        "model_id": "cagliostrolab/Comic-Diffusion",
         "negative_prompt": "photo, realistic, 3d, photograph, realistic skin",
     },
     "3d": {
