@@ -294,6 +294,138 @@ class TestReceiptGeneratorIntegration:
         os.remove(pdf_path)
 
 
+class TestReceiptCreationFlow:
+    """Integration tests for complete receipt creation flow"""
+
+    @pytest.mark.integration
+    def test_full_receipt_creation_flow(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        items_text = "123456 x 2\n789012 x 1"
+        result = processor.validate_items_text_sync(items_text)
+
+        assert result["valid"] is True
+        assert result["count"] == 2
+        assert "items" in result
+        assert result["items"][0]["article"] == "123456"
+        assert result["items"][0]["quantity"] == 2
+
+    @pytest.mark.integration
+    def test_receipt_creation_with_invalid_items(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        result = processor.validate_items_text_sync("invalid text")
+
+        assert result["valid"] is False
+        assert result["count"] == 0
+
+    @pytest.mark.integration
+    def test_receipt_pdf_generation_with_items(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        items = [
+            {
+                "article": "123456",
+                "name": "Test Product 1",
+                "brand": "Brand1",
+                "price": 150.0,
+                "quantity": 2,
+            },
+            {
+                "article": "654321",
+                "name": "Test Product 2",
+                "brand": "Brand2",
+                "price": 250.0,
+                "quantity": 1,
+            },
+        ]
+
+        pdf_path = processor.generator.generate_receipt_pdf(items)
+
+        assert pdf_path is not None
+        assert os.path.exists(pdf_path)
+        assert pdf_path.endswith(".pdf")
+
+        file_size = os.path.getsize(pdf_path)
+        assert file_size > 0
+
+        os.remove(pdf_path)
+
+    @pytest.mark.integration
+    def test_receipt_pdf_with_unknown_items(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        items = [
+            {
+                "article": "123456",
+                "name": "Known Product",
+                "brand": "Brand",
+                "price": 100.0,
+                "quantity": 1,
+            },
+        ]
+        unknown_items = [
+            {"article": "999999", "name": "Unknown Product", "quantity": 1, "price": 50.0},
+        ]
+
+        pdf_path = processor.generator.generate_receipt_with_unknown(items, unknown_items)
+
+        assert pdf_path is not None
+        assert os.path.exists(pdf_path)
+        assert pdf_path.endswith(".pdf")
+
+        os.remove(pdf_path)
+
+    @pytest.mark.integration
+    def test_receipt_validation_valid_input(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        result = processor.validate_items_text_sync("123456 x 2\n789012 x 3")
+
+        assert result["valid"] is True
+        assert result["count"] == 2
+        assert "items" in result
+
+    @pytest.mark.integration
+    def test_receipt_validation_empty_input(self, tmp_path):
+        from services.receipt_service.processor import ReceiptProcessor
+
+        processor = ReceiptProcessor(output_dir=str(tmp_path))
+
+        result = processor.validate_items_text_sync("")
+
+        assert result["valid"] is False
+        assert result["count"] == 0
+
+    @pytest.mark.integration
+    def test_receipt_total_calculation(self, tmp_path):
+        from services.receipt_service.receipt_generator import ReceiptGenerator
+
+        generator = ReceiptGenerator(output_dir=str(tmp_path))
+
+        items = [
+            {"article": "111", "name": "Product 1", "price": 100.0, "quantity": 2},
+            {"article": "222", "name": "Product 2", "price": 50.0, "quantity": 3},
+        ]
+
+        pdf_path = generator.generate_receipt_pdf(items)
+
+        assert pdf_path is not None
+        assert os.path.exists(pdf_path)
+
+        os.remove(pdf_path)
+
+
 class TestKafkaConsumerIntegration:
     """Integration tests for Kafka consumer"""
 

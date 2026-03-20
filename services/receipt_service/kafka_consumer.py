@@ -6,7 +6,7 @@ import time
 from concurrent.futures import Future
 from threading import Thread
 
-from ..common import ResultMessage, TaskMessage, TaskStatus
+from ..common import ResultMessage, TaskMessage, TaskStatus, TaskType
 from .processor import ReceiptProcessor
 
 logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class ReceiptKafkaConsumer:
                     for record in records:
                         try:
                             task = TaskMessage.from_json(record.value)
-                            if task.task_type == TaskStatus.RECEIPT:
+                            if task.task_type == TaskType.RECEIPT:
                                 logger.debug(f"Polled task: {task.task_id}")
                                 self._task_queue.put(task)
                         except Exception as e:
@@ -68,6 +68,7 @@ class ReceiptKafkaConsumer:
 
     def _process_loop(self):
         self._executor = asyncio.new_event_loop()
+        self._async_loop = self._executor
         asyncio.set_event_loop(self._executor)
 
         while self._running:

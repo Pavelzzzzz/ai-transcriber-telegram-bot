@@ -201,11 +201,12 @@ async def process_receipt_items(
     chat_id = update.effective_chat.id
 
     producer = TaskProducer(kafka_config)
-    producer.create_receipt_task(
+    task = producer.create_receipt_task(
         user_id=user_id,
         chat_id=chat_id,
         items_text=items_text,
     )
+    producer.send_task(task)
 
     context.user_data.pop("receipt_creating", None)
     context.user_data.pop("receipt_items", None)
