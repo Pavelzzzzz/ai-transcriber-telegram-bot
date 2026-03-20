@@ -1,7 +1,9 @@
+import json
 import logging
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 
 from .database import Base, get_db
@@ -49,6 +51,40 @@ class ImageGenerationHistory(Base):
     status = Column(String(20), default="success")
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class ReceiptHistory(Base):
+    __tablename__ = "receipt_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    items = Column(JSONB, nullable=False)
+    total = Column(Numeric(10, 2), default=0)
+    file_path = Column(String(500), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    def to_dict(self) -> dict[str, Any]:
+        total_val = self.total
+        if hasattr(total_val, "__float__"):
+            total_val = float(total_val)
+        elif not isinstance(total_val, (int, float)):
+            total_val = 0
+
+        items_val = self.items
+        if hasattr(items_val, "__len__") or isinstance(items_val, list):
+            items_count = len(items_val)
+        else:
+            items_count = 0
+
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "items": items_val,
+            "total": total_val,
+            "file_path": self.file_path,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "items_count": items_count,
+        }
 
 
 def get_user_settings(user_id: int) -> UserSettings | None:
@@ -168,3 +204,72 @@ def get_user_image_history(user_id: int, limit: int = 10) -> list:
     except Exception as e:
         logger.error(f"Error getting user image history: {e}")
         return []
+
+
+def add_receipt_history(
+    user_id: int,
+    items: list[dict],
+    total: float,
+    file_path: str | None = None,
+) -> ReceiptHistory | None:
+    try:
+        with get_db() as db:
+            history = ReceiptHistory(
+                user_id=user_id,
+                items=items,
+                total=total,
+                file_path=file_path,
+            )
+            db.add(history)
+            db.commit()
+            db.refresh(history)
+            return history
+    except Exception as e:
+        logger.error(f"Error adding receipt history: {e}")
+        return None
+
+
+def get_user_receipt_history(user_id: int, limit: int = 20) -> list[ReceiptHistory]:
+    try:
+        with get_db() as db:
+            return (
+                db.query(ReceiptHistory)
+                .filter(ReceiptHistory.user_id == user_id)
+                .order_by(ReceiptHistory.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+    except Exception as e:
+        logger.error(f"Error getting user receipt history: {e}")
+        return []
+
+
+def get_receipt_by_id(receipt_id: int, user_id: int) -> ReceiptHistory | None:
+    try:
+        with get_db() as db:
+            return (
+                db.query(ReceiptHistory)
+                .filter(ReceiptHistory.id == receipt_id, ReceiptHistory.user_id == user_id)
+                .first()
+            )
+    except Exception as e:
+        logger.error(f"Error getting receipt by id: {e}")
+        return None
+
+
+def delete_receipt_history(receipt_id: int, user_id: int) -> bool:
+    try:
+        with get_db() as db:
+            receipt = (
+                db.query(ReceiptHistory)
+                .filter(ReceiptHistory.id == receipt_id, ReceiptHistory.user_id == user_id)
+                .first()
+            )
+            if receipt:
+                db.delete(receipt)
+                db.commit()
+                return True
+            return False
+    except Exception as e:
+        logger.error(f"Error deleting receipt history: {e}")
+        return False

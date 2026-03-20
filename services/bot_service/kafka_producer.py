@@ -31,6 +31,7 @@ class TaskProducer:
             TaskType.OCR: self.config.topics["tasks_ocr"],
             TaskType.TRANSCRIBE: self.config.topics["tasks_transcribe"],
             TaskType.IMAGE_GEN: self.config.topics["tasks_image_gen"],
+            TaskType.RECEIPT: self.config.topics["tasks_receipt"],
         }
         return topic_mapping.get(task_type)
 
@@ -89,6 +90,20 @@ class TaskProducer:
             chat_id=chat_id,
             timestamp=datetime.now(),
             file_path=prompt,
+            metadata=metadata or {},
+        )
+        return task
+
+    def create_receipt_task(
+        self, user_id: int, chat_id: int, items_text: str, metadata: dict = None
+    ) -> TaskMessage:
+        task = TaskMessage(
+            task_id="",
+            task_type=TaskType.RECEIPT,
+            user_id=user_id,
+            chat_id=chat_id,
+            timestamp=datetime.now(),
+            file_path=items_text,
             metadata=metadata or {},
         )
         return task

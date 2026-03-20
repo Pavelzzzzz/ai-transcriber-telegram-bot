@@ -59,6 +59,18 @@ CREATE INDEX IF NOT EXISTS idx_task_queue_user_id ON task_queue(user_id);
 CREATE INDEX IF NOT EXISTS idx_task_queue_status ON task_queue(status);
 CREATE INDEX IF NOT EXISTS idx_task_queue_priority ON task_queue(priority DESC);
 
+CREATE TABLE IF NOT EXISTS receipt_history (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    items JSONB NOT NULL,
+    total DECIMAL(10, 2) DEFAULT 0,
+    file_path VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_receipt_history_user_id ON receipt_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_receipt_history_created_at ON receipt_history(created_at DESC);
+
 -- Migrate existing tables to add new columns
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS noise_reduction BOOLEAN DEFAULT TRUE;
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS aspect_ratio VARCHAR(10) DEFAULT '1:1';

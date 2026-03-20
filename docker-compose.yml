@@ -200,6 +200,24 @@ services:
       retries: 3
       start_period: 10s
 
+  receipt-service:
+    build:
+      context: .
+      dockerfile: services/receipt_service/Dockerfile
+    container_name: receipt-service
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_CLIENT_ID=receipt-service
+      - OUTPUT_DIR=/app/downloads/receipts
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./downloads:/app/downloads
+    networks:
+      - bot-network
+    restart: unless-stopped
+
 networks:
   bot-network:
     driver: bridge

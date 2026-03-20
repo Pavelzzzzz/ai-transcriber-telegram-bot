@@ -18,6 +18,7 @@ class KafkaConfig:
                 "tasks_transcribe": os.getenv("KAFKA_TOPIC_TRANSCRIBE_TASKS", "tasks.transcribe"),
                 "tasks_tts": os.getenv("KAFKA_TOPIC_TTS_TASKS", "tasks.tts"),
                 "tasks_image_gen": os.getenv("KAFKA_TOPIC_IMAGE_GEN_TASKS", "tasks.image_gen"),
+                "tasks_receipt": os.getenv("KAFKA_TOPIC_RECEIPT_TASKS", "tasks.receipt"),
                 "results_ocr": os.getenv("KAFKA_TOPIC_OCR_RESULTS", "results.ocr"),
                 "results_transcribe": os.getenv(
                     "KAFKA_TOPIC_TRANSCRIBE_RESULTS", "results.transcribe"
@@ -26,6 +27,7 @@ class KafkaConfig:
                 "results_image_gen": os.getenv(
                     "KAFKA_TOPIC_IMAGE_GEN_RESULTS", "results.image_gen"
                 ),
+                "results_receipt": os.getenv("KAFKA_TOPIC_RECEIPT_RESULTS", "results.receipt"),
                 "notifications": os.getenv("KAFKA_TOPIC_NOTIFICATIONS", "notifications"),
             },
         )

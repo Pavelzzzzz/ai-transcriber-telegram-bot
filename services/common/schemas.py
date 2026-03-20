@@ -10,6 +10,7 @@ class TaskType(str, Enum):
     OCR = "ocr"
     TRANSCRIBE = "transcribe"
     IMAGE_GEN = "image_gen"
+    RECEIPT = "receipt"
 
 
 class TaskStatus(str, Enum):

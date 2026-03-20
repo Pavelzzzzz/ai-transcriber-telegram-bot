@@ -19,7 +19,7 @@ from services.common.kafka_config import KafkaConfig
 from services.common.schemas import ResultMessage, TaskStatus
 from services.common.user_settings_repo import get_or_create_user_settings
 
-from . import settings_handlers
+from . import receipt_handlers, settings_handlers
 from .kafka_consumer import NotificationConsumer, ResultConsumer
 from .kafka_producer import TaskProducer
 
@@ -546,9 +546,18 @@ class TelegramBotService:
         application.add_handler(CommandHandler("status", self.status_command))
         application.add_handler(CommandHandler("queue", self.queue_command))
         application.add_handler(CommandHandler("settings", settings_handlers.settings_command))
+        application.add_handler(CommandHandler("receipt", receipt_handlers.receipt_command))
 
         application.add_handler(
             CallbackQueryHandler(settings_handlers.settings_callback, pattern="^settings:")
+        )
+        application.add_handler(
+            CallbackQueryHandler(receipt_handlers.receipt_callback, pattern="^receipt:")
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                receipt_handlers.cancel_receipt_creation, pattern="^receipt:cancel$"
+            )
         )
         application.add_handler(
             CallbackQueryHandler(
@@ -591,6 +600,7 @@ class TelegramBotService:
             BotCommand("help", "📖 Помощь"),
             BotCommand("mode", "🔧 Выбор режима"),
             BotCommand("settings", "🎨 Настройки изображений"),
+            BotCommand("receipt", "📋 Товарные чеки WB"),
             BotCommand("status", "📊 Статус"),
             BotCommand("queue", "📋 Ваша очередь задач"),
         ]

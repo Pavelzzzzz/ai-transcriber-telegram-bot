@@ -23,6 +23,11 @@ AI Transcriber - это микросервисный Telegram-бот, испол
   - Соотношения сторон: 1:1, 16:9, 9:16, 4:3, 3:2, 2:3
   - Количество вариаций: 1-4
   - Negative prompt
+- 🧾 **Товарные чеки WB** - Генерация товарных чеков для Wildberries (РБ)
+  - Поиск товаров по артикулам WB
+  - Поддержка ссылок WB
+  - Генерация PDF в формате товарного чека РБ
+  - Сохранение истории чеков
 - ⚡ **Масштабируемость** - Независимое масштабирование сервисов
 - 🌍 **Мультиязычность** - Поддержка русского, английского и других языков
 - 🔔 **Уведомления** - Kafka topic для push-уведомлений пользователям
@@ -51,18 +56,18 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │                               │  (push/email)  │                      │
 │                               └─────────────┘                       │
 └─────────────────────────────────────────────────────────────────────┘
-    │               │               │               │
-    ▼               ▼               ▼               ▼
-┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────────┐
-│   OCR    │  │ TRANSCRIBE  │  │   TTS    │  │ IMAGE_GEN   │
-│ Service  │  │  Service    │  │ Service  │  │  Service    │
-│(RapidOCR)│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │
-└──────────┘  └──────────────┘  └──────────┘  └──────────────┘
+    │               │               │               │               │
+    ▼               ▼               ▼               ▼               ▼
+┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────┐
+│   OCR    │  │ TRANSCRIBE  │  │   TTS    │  │ IMAGE_GEN   │  │ RECEIPT  │
+│ Service  │  │  Service    │  │ Service  │  │  Service    │  │ Service  │
+│(RapidOCR)│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │  │(WB API)  │
+└──────────┘  └──────────────┘  └──────────┘  └──────────────┘  └──────────┘
                                     │
                                     ▼
                             ┌──────────────┐
                             │ PostgreSQL   │
-                            │ (user_settings)│
+                            │ (user_settings, receipt_history)│
                             └──────────────┘
 ```
 
@@ -75,6 +80,7 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │   │   ├── kafka_producer.py
 │   │   ├── kafka_consumer.py
 │   │   ├── settings_handlers.py
+│   │   ├── receipt_handlers.py  # Обработчики товарных чеков
 │   │   └── tests/
 │   ├── ocr_service/             # OCR (RapidOCR)
 │   ├── transcription_service/   # Whisper
@@ -82,6 +88,12 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │   ├── image_gen_service/       # Stable Diffusion / FLUX
 │   │   ├── main.py
 │   │   ├── processor.py        # Мультимодельная генерация
+│   │   └── kafka_consumer.py
+│   ├── receipt_service/          # Товарные чеки WB
+│   │   ├── main.py
+│   │   ├── processor.py         # Логика обработки
+│   │   ├── wb_client.py        # WB API клиент
+│   │   ├── receipt_generator.py # Генерация PDF
 │   │   └── kafka_consumer.py
 │   └── common/                  # Общие модули
 │       ├── base_service.py      # Базовый класс сервиса
@@ -91,9 +103,9 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │       ├── user_settings_repo.py # Настройки пользователей
 │       ├── hardware.py          # GPU detection
 │       └── exceptions.py
-├── db/                          # Миграции Liquibase
+├── db/                          # Миграции (init.sh)
 │   ├── Dockerfile
-│   └── changelog/
+│   └── init.sh
 ├── docker-compose.yml            # Orchestration
 ├── requirements.txt              # Python зависимости
 └── .env.example                 # Пример конфигурации
@@ -192,10 +204,12 @@ TTS_LANGUAGE=ru
 | `tasks.transcribe` | → | transcription_service |
 | `tasks.tts` | → | tts_service |
 | `tasks.image_gen` | → | image_gen_service |
+| `tasks.receipt` | → | receipt_service |
 | `results.ocr` | → | bot_service |
 | `results.transcribe` | → | bot_service |
 | `results.tts` | → | bot_service |
 | `results.image_gen` | → | bot_service |
+| `results.receipt` | → | bot_service |
 | `notifications` | → | bot_service |
 
 ## 🎮 Использование
@@ -206,6 +220,7 @@ TTS_LANGUAGE=ru
 - `/help` - Помощь
 - `/mode` - Выбор режима работы
 - `/settings` - Настройки генерации изображений
+- `/receipt` - Товарные чеки WB
 - `/queue` - Ваша очередь задач
 - `/status` - Статус сервисов
 
@@ -215,6 +230,28 @@ TTS_LANGUAGE=ru
 2. **🎤 Аудио → Текст** - Отправьте голосовое для транскрипции
 3. **🔊 Текст → Аудио** - Напишите текст для TTS
 4. **🖼️ Текст → Изображение** - Напишите текст для генерации
+5. **🧾 Товарный чек** - Создание чека по товарам WB
+
+### Товарные чеки (/receipt)
+
+Создание товарных чеков для Wildberries в формате РБ:
+
+**Формат ввода:**
+- Артикул: `178601980 x 2`
+- Ссылка WB: `https://wildberries.ru/catalog/12345678/detail.aspx x 1`
+
+**Пример:**
+```
+178601980 x 2
+99999999 x 1
+https://wildberries.ru/catalog/11111111/detail.aspx x 3
+```
+
+**Возможности:**
+- Поиск товаров по артикулам WB через публичный API
+- Парсинг ссылок WB
+- Генерация PDF в формате товарного чека РБ
+- Сохранение истории чеков
 
 ### Настройки генерации (/settings)
 
