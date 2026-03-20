@@ -454,6 +454,12 @@ class TelegramBotService:
         user_id = update.effective_user.id if update.effective_user else 0
         text = update.message.text
 
+        if context.user_data.get("receipt_creating"):
+            from . import receipt_handlers
+
+            await receipt_handlers.process_receipt_items(update, context, text)
+            return
+
         if await settings_handlers.handle_negative_prompt_input(update, context, user_id):
             return
 

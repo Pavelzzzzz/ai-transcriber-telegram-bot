@@ -18,6 +18,9 @@ async def receipt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_receipt_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop("receipt_creating", None)
+    context.user_data.pop("receipt_items", None)
+
     user_id = update.effective_user.id
     receipts = get_user_receipt_history(user_id, limit=10)
 
@@ -102,6 +105,9 @@ async def handle_create_receipt(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def handle_view_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE, receipt_id: int):
+    context.user_data.pop("receipt_creating", None)
+    context.user_data.pop("receipt_items", None)
+
     user_id = update.effective_user.id
     receipt = get_receipt_by_id(receipt_id, user_id)
 
