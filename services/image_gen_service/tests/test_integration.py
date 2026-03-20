@@ -147,12 +147,12 @@ class TestImageGenMetadataDefaults:
 
     @pytest.mark.integration
     def test_default_metadata(self):
-        assert IMAGE_GEN_METADATA_DEFAULTS["model"] == "sdxl"
+        assert IMAGE_GEN_METADATA_DEFAULTS["model"] == "sd15"
         assert IMAGE_GEN_METADATA_DEFAULTS["style"] == ""
         assert IMAGE_GEN_METADATA_DEFAULTS["aspect_ratio"] == "1:1"
         assert IMAGE_GEN_METADATA_DEFAULTS["num_variations"] == 1
-        assert IMAGE_GEN_METADATA_DEFAULTS["negative_prompt"] == ""
-        assert IMAGE_GEN_METADATA_DEFAULTS["num_inference_steps"] == 30
+        assert "low quality" in IMAGE_GEN_METADATA_DEFAULTS["negative_prompt"]
+        assert IMAGE_GEN_METADATA_DEFAULTS["num_inference_steps"] == 50
         assert IMAGE_GEN_METADATA_DEFAULTS["guidance_scale"] == 7.5
         assert IMAGE_GEN_METADATA_DEFAULTS["seed"] is None
 
@@ -195,21 +195,14 @@ class TestHardwareIntegration:
         assert ASPECT_RATIO_SIZES["16:9"] == (1024, 576)
 
     @pytest.mark.integration
-    @patch("services.common.hardware.torch")
-    def test_get_available_models_cpu(self, mock_torch):
-        mock_torch.cuda.is_available.return_value = False
+    def test_get_vram_gb_returns_zero_without_torch(self):
+        from services.common.hardware import get_vram_gb
 
-        from services.common.hardware import get_available_models
-
-        available = get_available_models()
-
-        assert "sd15" in available
+        vram = get_vram_gb()
+        assert vram == 0
 
     @pytest.mark.integration
-    @patch("services.common.hardware.torch")
-    def test_is_model_available(self, mock_torch):
-        mock_torch.cuda.is_available.return_value = False
-
+    def test_is_model_available_sd15(self):
         from services.common.hardware import is_model_available
 
         assert is_model_available("sd15") is True

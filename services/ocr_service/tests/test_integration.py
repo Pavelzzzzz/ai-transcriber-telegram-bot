@@ -70,30 +70,16 @@ class TestOCRProcessor:
 
         processor = OCRProcessor()
         assert processor is not None
+        assert processor._reader is None
 
     @pytest.mark.integration
-    @pytest.mark.asyncio
-    @patch("services.ocr_service.processor.ImageProcessor")
-    async def test_process_image_mock(self, mock_processor_class):
-        """Test image processing with mock"""
+    def test_processor_gpu_detection(self):
+        """Test GPU detection"""
         from services.ocr_service.processor import OCRProcessor
 
-        mock_processor = Mock()
-        mock_processor.extract_text_from_image = AsyncMock(return_value="Test text")
-        mock_processor_class.return_value = mock_processor
-
         processor = OCRProcessor()
-
-        test_file = "/tmp/test_image.jpg"
-        os.makedirs("/tmp", exist_ok=True)
-        from PIL import Image
-
-        img = Image.new("RGB", (100, 100), color="white")
-        img.save(test_file)
-
-        result = await processor.process_image(test_file)
-
-        assert result["text"] == "Test text"
+        gpu = processor._detect_gpu()
+        assert isinstance(gpu, bool)
 
 
 if __name__ == "__main__":

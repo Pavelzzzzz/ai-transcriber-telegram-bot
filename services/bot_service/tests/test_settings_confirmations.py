@@ -185,7 +185,7 @@ class TestNoiseReductionSettings:
             return_value=mock_settings,
         ):
             with patch("services.bot_service.settings_handlers.update_user_settings"):
-                await handle_settings_noise_callback(mock_query, 12345)
+                await handle_settings_noise_callback(mock_update, Mock())
 
         mock_query.edit_message_text.assert_called_once()
         call_args = mock_query.edit_message_text.call_args[0][0]
@@ -207,8 +207,10 @@ class TestNoiseReductionSettings:
             "services.bot_service.settings_handlers.get_or_create_user_settings",
             return_value=mock_settings,
         ):
-            with patch("services.bot_service.settings_handlers.update_user_settings") as mock_update_settings:
-                await handle_settings_noise_callback(mock_query, 12345)
+            with patch(
+                "services.bot_service.settings_handlers.update_user_settings"
+            ) as mock_update_settings:
+                await handle_settings_noise_callback(mock_update, Mock())
 
         mock_query.edit_message_text.assert_called_once()
         call_args = mock_query.edit_message_text.call_args[0][0]
@@ -228,7 +230,7 @@ class TestNoiseReductionSettings:
             "services.bot_service.settings_handlers.get_or_create_user_settings",
             side_effect=Exception("DB Error"),
         ):
-            await handle_settings_noise_callback(mock_query, 12345)
+            await handle_settings_noise_callback(mock_update, Mock())
 
         mock_query.edit_message_text.assert_called_once()
         call_args = mock_query.edit_message_text.call_args[0][0]

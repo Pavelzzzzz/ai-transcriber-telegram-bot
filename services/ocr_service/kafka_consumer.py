@@ -31,8 +31,9 @@ class OCRKafkaConsumer:
                     auto_offset_reset="earliest",
                     group_id=f"{self.config.client_id}_ocr_group",
                     max_poll_interval_ms=300000,
-                    session_timeout_ms=30000,
-                    heartbeat_interval_ms=10000,
+                    max_poll_records=1,
+                    session_timeout_ms=300000,
+                    heartbeat_interval_ms=60000,
                 )
             except Exception as e:
                 raise KafkaConsumerError(f"Failed to create Kafka consumer: {e}", "ocr_service")

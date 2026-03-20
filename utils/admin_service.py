@@ -39,12 +39,12 @@ class AdminService:
             .filter(
                 User.last_activity.isnot(None),
                 User.last_activity >= week_ago,
-                User.is_blocked == False,
+                not User.is_blocked,
             )
             .count()
         )
 
-        blocked_users = self.db.query(User).filter(User.is_blocked == True).count()
+        blocked_users = self.db.query(User).filter(User.is_blocked).count()
         admin_users = self.db.query(User).filter(User.role == UserRole.ADMIN).count()
 
         return {

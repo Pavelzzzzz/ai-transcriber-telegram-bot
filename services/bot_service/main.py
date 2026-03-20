@@ -3,6 +3,8 @@ import logging
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 from telegram import BotCommand, Update
 from telegram.ext import (
     Application,
@@ -13,16 +15,15 @@ from telegram.ext import (
     filters,
 )
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from services.common.kafka_config import KafkaConfig
 from services.common.schemas import ResultMessage, TaskStatus
 from services.common.user_settings_repo import get_or_create_user_settings
 
-kafka_config = KafkaConfig.from_env()
 from . import settings_handlers
 from .kafka_consumer import NotificationConsumer, ResultConsumer
 from .kafka_producer import TaskProducer
+
+kafka_config = KafkaConfig.from_env()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -568,6 +569,12 @@ class TelegramBotService:
             CallbackQueryHandler(
                 settings_handlers.handle_settings_variations_callback,
                 pattern="^settings:variations:",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                settings_handlers.handle_settings_noise_callback,
+                pattern="^settings:noise$",
             )
         )
 

@@ -86,13 +86,14 @@ services:
   ocr-service:
     build:
       context: .
-      dockerfile: services/ocr_service/Dockerfile
+      dockerfile: services/ocr_service/Dockerfile.${OCR_GPU_TYPE:-cpu}
     container_name: ocr-service
     ports:
       - "8002:8002"
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_CLIENT_ID=ocr-service
+      - GPU_TYPE=${OCR_GPU_TYPE:-cpu}
     depends_on:
       kafka:
         condition: service_healthy
@@ -101,12 +102,16 @@ services:
     networks:
       - bot-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 30s
 
   transcription-service:
     build:

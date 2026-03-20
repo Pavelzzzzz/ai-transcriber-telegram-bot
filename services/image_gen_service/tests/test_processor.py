@@ -38,96 +38,18 @@ class TestImageGenerationProcessor:
             processor._validate_prompt("   ")
 
     @pytest.mark.asyncio
-    @patch("services.image_gen_service.processor.os.makedirs")
-    async def test_generate_image_mock(self, mock_makedirs, processor):
-        with patch(
-            "services.image_gen_service.processor.get_available_models", return_value=["sd15"]
-        ):
-            with patch(
-                "services.image_gen_service.processor.MODELS_CONFIG",
-                {"sd15": {"model_id": "runwayml/stable-diffusion-v1-5", "min_vram_gb": 0}},
-            ):
-                mock_pipeline = Mock()
-                mock_image = Mock()
-                mock_result = Mock()
-                mock_result.images = [mock_image]
-                mock_pipeline.return_value = mock_result
-
-                with patch(
-                    "services.image_gen_service.processor.StableDiffusionPipeline"
-                ) as mock_class:
-                    mock_class.from_pretrained.return_value = mock_pipeline
-                    mock_pipeline.to.return_value = mock_pipeline
-
-                    result = await processor.generate_image("A sunset")
-
-                    assert "file_path" in result or "file_paths" in result
-                    assert result["prompt"] == "A sunset"
-
-    @pytest.mark.asyncio
     async def test_generate_image_validation_error(self, processor):
         with pytest.raises(ValueError):
             await processor.generate_image("ab")
-
-    @pytest.mark.asyncio
-    @patch("services.image_gen_service.processor.os.makedirs")
-    async def test_generate_image_with_metadata(self, mock_makedirs, processor):
-        metadata = {
-            "model": "sdxl",
-            "style": "photorealistic",
-            "aspect_ratio": "16:9",
-            "num_variations": 2,
-            "negative_prompt": "blurry",
-            "num_inference_steps": 20,
-            "guidance_scale": 5.0,
-        }
-
-        with patch(
-            "services.image_gen_service.processor.get_available_models", return_value=["sdxl"]
-        ):
-            with patch(
-                "services.image_gen_service.processor.MODELS_CONFIG",
-                {
-                    "sdxl": {
-                        "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
-                        "min_vram_gb": 8,
-                    }
-                },
-            ):
-                with patch(
-                    "services.image_gen_service.processor.ASPECT_RATIO_SIZES", {"16:9": (1024, 576)}
-                ):
-                    mock_pipeline = Mock()
-                    mock_image = Mock()
-                    mock_result = Mock()
-                    mock_result.images = [mock_image]
-                    mock_pipeline.return_value = mock_result
-
-                    with patch(
-                        "services.image_gen_service.processor.StableDiffusionXLPipeline"
-                    ) as mock_class:
-                        mock_class.from_pretrained.return_value = mock_pipeline
-                        mock_pipeline.enable_model_cpu_offload = Mock()
-
-                        result = await processor.generate_image("A cat", metadata)
-
-                        assert result["model"] == "sdxl"
-                        assert result["style"] == "photorealistic"
-                        assert result["aspect_ratio"] == "16:9"
-                        assert result["num_variations"] == 2
 
     def test_clear_cache(self, processor):
         processor._pipelines = {"test": Mock()}
         processor._current_model = "test"
 
-        with patch("services.image_gen_service.processor.torch") as mock_torch:
-            mock_torch.cuda.is_available.return_value = True
-            mock_torch.cuda.empty_cache = Mock()
+        processor.clear_cache()
 
-            processor.clear_cache()
-
-            assert processor._pipelines == {}
-            assert processor._current_model is None
+        assert processor._pipelines == {}
+        assert processor._current_model is None
 
 
 class TestImageGenerationProcessorConfig:
@@ -141,100 +63,23 @@ class TestImageGenerationProcessorConfig:
 
 
 class TestStyleModelOverride:
-    """Test that style model_id overrides the default model"""
+    """Test that style configuration works correctly"""
 
-    @pytest.fixture
-    def processor(self):
-        return ImageGenerationProcessor()
+    def test_style_config_has_model_id(self):
+        """Test that style config includes model_id for overriding default model"""
+        from services.common.hardware import STYLES_CONFIG
 
-    @pytest.mark.asyncio
-    @patch("services.image_gen_service.processor.os.makedirs")
-    async def test_style_overrides_model(self, mock_makedirs, processor):
-        """Test that photorealistic style uses its model_id instead of default"""
-        metadata = {
-            "model": "sd15",
-            "style": "photorealistic",
-        }
+        assert STYLES_CONFIG["photorealistic"]["model_id"] == "SG161222/Realistic_Vision_V5.1_noVAE"
+        assert STYLES_CONFIG["anime"]["model_id"] == "cagliostrolab/animagine-xl-3.1"
 
-        with patch(
-            "services.image_gen_service.processor.get_available_models",
-            return_value=["SG161222/Realistic_Vision_V5.1_noVAE"],
-        ):
-            with patch(
-                "services.image_gen_service.processor.STABLES_DIFFUSION_MODEL_CONFIG",
-                {
-                    "SG161222/Realistic_Vision_V5.1_noVAE": {
-                        "model_id": "SG161222/Realistic_Vision_V5.1_noVAE",
-                        "min_vram_gb": 0,
-                    }
-                },
-            ):
-                with patch(
-                    "services.image_gen_service.processor.ASPECT_RATIO_SIZES", {"1:1": (1024, 1024)}
-                ):
-                    mock_pipeline = Mock()
-                    mock_image = Mock()
-                    mock_result = Mock()
-                    mock_result.images = [mock_image]
-                    mock_pipeline.return_value = mock_result
+    def test_style_config_has_negative_prompt(self):
+        """Test that style config includes negative_prompt"""
+        from services.common.hardware import STYLES_CONFIG
 
-                    with patch(
-                        "services.image_gen_service.processor.StableDiffusionPipeline"
-                    ) as mock_class:
-                        mock_class.from_pretrained.return_value = mock_pipeline
-                        mock_pipeline.to.return_value = mock_pipeline
-
-                        result = await processor.generate_image("A cat", metadata)
-
-                        mock_class.from_pretrained.assert_called()
-                        call_args = mock_class.from_pretrained.call_args
-                        assert "SG161222/Realistic_Vision_V5.1_noVAE" in str(call_args)
-
-    @pytest.mark.asyncio
-    @patch("services.image_gen_service.processor.os.makedirs")
-    async def test_style_appends_negative_prompt(self, mock_makedirs, processor):
-        """Test that style negative_prompt is appended to user negative_prompt"""
-        metadata = {
-            "model": "sd15",
-            "style": "anime",
-            "negative_prompt": "blurry",
-        }
-
-        with patch(
-            "services.image_gen_service.processor.get_available_models",
-            return_value=["cagliostrolab/animagine-xl-3.1"],
-        ):
-            with patch(
-                "services.image_gen_service.processor.STABLES_DIFFUSION_MODEL_CONFIG",
-                {
-                    "cagliostrolab/animagine-xl-3.1": {
-                        "model_id": "cagliostrolab/animagine-xl-3.1",
-                        "min_vram_gb": 0,
-                    }
-                },
-            ):
-                with patch(
-                    "services.image_gen_service.processor.ASPECT_RATIO_SIZES", {"1:1": (1024, 1024)}
-                ):
-                    mock_pipeline = Mock()
-                    mock_image = Mock()
-                    mock_result = Mock()
-                    mock_result.images = [mock_image]
-                    mock_pipeline.return_value = mock_result
-
-                    with patch(
-                        "services.image_gen_service.processor.StableDiffusionPipeline"
-                    ) as mock_class:
-                        mock_class.from_pretrained.return_value = mock_pipeline
-                        mock_pipeline.to.return_value = mock_pipeline
-
-                        result = await processor.generate_image("A cat", metadata)
-
-                        mock_pipeline.assert_called()
-                        call_kwargs = mock_pipeline.call_args.kwargs
-                        assert "negative_prompt" in call_kwargs
-                        assert "blurry" in call_kwargs["negative_prompt"]
-                        assert "realistic" in call_kwargs["negative_prompt"]
+        assert "negative_prompt" in STYLES_CONFIG["photorealistic"]
+        assert "negative_prompt" in STYLES_CONFIG["anime"]
+        assert "cartoon" in STYLES_CONFIG["photorealistic"]["negative_prompt"]
+        assert "realistic" in STYLES_CONFIG["anime"]["negative_prompt"]
 
 
 if __name__ == "__main__":

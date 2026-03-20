@@ -31,10 +31,12 @@ def preprocess_audio(
         filters.append("loudnorm=I=-16:LRA=11:TP=-1.5")
 
     if denoise:
-        filters.extend([
-            "highpass=f=200",
-            "lowpass=f=8000",
-        ])
+        filters.extend(
+            [
+                "highpass=f=200",
+                "lowpass=f=8000",
+            ]
+        )
 
     if remove_silence:
         filters.append(
@@ -45,10 +47,14 @@ def preprocess_audio(
         cmd = [
             "ffmpeg",
             "-y",
-            "-i", input_path,
-            "-acodec", "pcm_s16le",
-            "-ar", "16000",
-            "-ac", "1",
+            "-i",
+            input_path,
+            "-acodec",
+            "pcm_s16le",
+            "-ar",
+            "16000",
+            "-ac",
+            "1",
         ]
 
         if filters:
@@ -56,7 +62,7 @@ def preprocess_audio(
 
         cmd.append(output_path)
 
-        result = subprocess.run(
+        subprocess.run(
             cmd,
             check=True,
             capture_output=True,

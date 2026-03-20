@@ -412,7 +412,6 @@ class MultilingualTextProcessor:
                         for abbrev in capital_rules.get("abbreviations", [])
                     ):
                         if not sentence[0].isupper():
-                            old_sentence = sentence
                             sentence = sentence[0].upper() + sentence[1:]
 
                             if i == 0:

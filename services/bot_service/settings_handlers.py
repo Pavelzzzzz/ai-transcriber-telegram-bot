@@ -394,7 +394,14 @@ async def handle_settings_variations_callback(update: Update, context: ContextTy
         await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
 
 
-async def handle_settings_noise_callback(query, user_id: int):
+async def handle_settings_noise_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query or not query.data or query.data != "settings:noise":
+        return
+
+    await query.answer()
+    user_id = update.effective_user.id
+
     try:
         settings = get_or_create_user_settings(user_id)
         current_value = settings.noise_reduction if settings else True
@@ -402,7 +409,6 @@ async def handle_settings_noise_callback(query, user_id: int):
 
         update_user_settings(user_id, noise_reduction=new_value)
 
-        await query.answer()
         await query.edit_message_text(
             f"✅ **Шумоподавление:** {'Включено' if new_value else 'Выключено'}\n\n"
             f"Будет {'применяться' if new_value else 'пропускаться'} при транскрибации голоса."

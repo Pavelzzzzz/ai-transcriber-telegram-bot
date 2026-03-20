@@ -36,6 +36,7 @@ class ImageGenKafkaConsumer:
         self._pending_tasks: dict[str, Future] = {}
         self._tasks_lock = Lock()
         self._notification_sender: Callable[[str, str], None] | None = None
+        self._async_loop: asyncio.AbstractEventLoop | None = None
 
     def set_notification_sender(self, sender: Callable[[str, str], None]):
         self._notification_sender = sender
@@ -113,8 +114,8 @@ class ImageGenKafkaConsumer:
                 time.sleep(1)
 
     def _process_loop(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        self._async_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._async_loop)
 
         while self._running:
             try:
@@ -125,27 +126,20 @@ class ImageGenKafkaConsumer:
 
                 logger.info(f"Processing task: {task.task_id}")
 
-                future = self._executor.submit(self._run_task_sync, task, loop)
+                future = self._executor.submit(self._run_task_sync, task)
 
                 with self._tasks_lock:
                     self._pending_tasks[task.task_id] = future
 
-                future.add_done_callback(
-                    lambda f, tid=task.task_id: self._cleanup_task(tid, f)
-                )
+                future.add_done_callback(lambda f, tid=task.task_id: self._cleanup_task(tid, f))
 
             except queue.Empty:
                 continue
             except Exception as e:
                 logger.error(f"Error in process loop: {e}")
 
-        loop.close()
-
-    def _run_task_sync(self, task: TaskMessage, loop: asyncio.AbstractEventLoop) -> ResultMessage:
-        try:
-            return loop.run_until_complete(self._process_task_async(task))
-        finally:
-            loop.close()
+    def _run_task_sync(self, task: TaskMessage) -> ResultMessage:
+        return self._async_loop.run_until_complete(self._process_task_async(task))
 
     def _cleanup_task(self, task_id: str, future: Future):
         try:
@@ -166,6 +160,8 @@ class ImageGenKafkaConsumer:
         try:
             prompt = task.file_path
             metadata = task.metadata or {}
+
+            logger.info(f"Received image gen task {task.task_id}: metadata={metadata}")
 
             self._send_started_notification(task)
 
@@ -210,6 +206,9 @@ class ImageGenKafkaConsumer:
             self._poll_thread.join(timeout=5)
         if self._process_thread:
             self._process_thread.join(timeout=5)
+
+        if self._async_loop and not self._async_loop.is_closed():
+            self._async_loop.close()
 
         self._executor.shutdown(wait=True)
         if self._consumer:

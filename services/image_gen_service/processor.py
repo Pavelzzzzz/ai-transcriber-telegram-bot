@@ -104,8 +104,18 @@ class ImageGenerationProcessor:
             logger.warning(f"Model {model} not available, falling back to sd15")
             model = "sd15"
 
-        config = MODELS_CONFIG.get(model, MODELS_CONFIG["sd15"])
-        model_id = config["model_id"]
+        style_config = next(
+            (cfg for cfg in STYLES_CONFIG.values() if cfg.get("model_id") == model), None
+        )
+
+        if style_config:
+            model_id = model
+            model_lower = model.lower()
+            is_sdxl = "xl" in model_lower or "sdxl" in model_lower
+        else:
+            config = MODELS_CONFIG.get(model, MODELS_CONFIG["sd15"])
+            model_id = config["model_id"]
+            is_sdxl = model == "sdxl"
 
         device, torch_dtype = self._get_device()
 
@@ -118,10 +128,10 @@ class ImageGenerationProcessor:
                     model_id,
                     torch_dtype=torch_dtype,
                 )
-            elif model == "sdxl":
+            elif is_sdxl:
                 from diffusers import StableDiffusionXLPipeline
 
-                logger.info(f"Loading SDXL on {device}...")
+                logger.info(f"Loading SDXL model on {device}...")
                 pipeline = StableDiffusionXLPipeline.from_pretrained(
                     model_id,
                     torch_dtype=torch_dtype,
@@ -129,7 +139,7 @@ class ImageGenerationProcessor:
             else:
                 from diffusers import StableDiffusionPipeline
 
-                logger.info(f"Loading SD 1.5 on {device}...")
+                logger.info(f"Loading SD model on {device}...")
                 pipeline = StableDiffusionPipeline.from_pretrained(
                     model_id,
                     torch_dtype=torch_dtype,
@@ -169,8 +179,14 @@ class ImageGenerationProcessor:
 
     def _get_pipeline_for_model(self, model: str):
         available = get_available_models()
-        if model not in available:
+
+        style_model_ids = [
+            cfg.get("model_id") for cfg in STYLES_CONFIG.values() if cfg.get("model_id")
+        ]
+
+        if model not in available and model not in style_model_ids:
             model = available[0] if available else "sd15"
+
         return self._load_pipeline(model)
 
     async def generate_image(
@@ -192,11 +208,12 @@ class ImageGenerationProcessor:
         guidance_scale = meta.get("guidance_scale", 7.5)
         seed = meta.get("seed")
 
-        width, height = ASPECT_RATIO_SIZES.get(aspect_ratio, (1024, 1024))
+        logger.info(
+            f"Image generation settings: model={model}, style={style}, "
+            f"aspect_ratio={aspect_ratio}, num_variations={num_variations}"
+        )
 
-        if model == "sd15":
-            width = min(width, 512)
-            height = min(height, 512)
+        width, height = ASPECT_RATIO_SIZES.get(aspect_ratio, (1024, 1024))
 
         if not negative_prompt:
             negative_prompt = "low quality, blurry, distorted, deformed, bad anatomy, worst quality, low resolution, watermark, text, signature"
@@ -207,7 +224,22 @@ class ImageGenerationProcessor:
                 model = style_config["model_id"]
                 style_negative = style_config.get("negative_prompt", "")
                 if style_negative:
-                    negative_prompt = f"{negative_prompt}, {style_negative}" if negative_prompt else style_negative
+                    negative_prompt = (
+                        f"{negative_prompt}, {style_negative}"
+                        if negative_prompt
+                        else style_negative
+                    )
+
+        model_lower = model.lower()
+        needs_sd15_size = (
+            model == "sd15"
+            or model_lower == "sd15"
+            or ("sd15" in model_lower and "xl" not in model_lower)
+        )
+
+        if needs_sd15_size:
+            width = min(width, 512)
+            height = min(height, 512)
 
         self._validate_prompt(prompt)
 

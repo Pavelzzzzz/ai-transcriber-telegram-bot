@@ -33,11 +33,14 @@ class TestImageGenKafkaConsumerResultDelivery:
 
     @pytest.fixture
     def sample_task(self):
+        from datetime import datetime
+
         return TaskMessage(
             task_id="img-test-123",
             task_type=TaskType.IMAGE_GEN,
             user_id=12345,
             chat_id=67890,
+            timestamp=datetime.now(),
             file_path="A beautiful sunset",
             metadata={"model": "sd15", "style": "", "aspect_ratio": "1:1"},
         )

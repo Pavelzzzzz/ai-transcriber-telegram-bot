@@ -72,17 +72,17 @@ class TestTTSProcessor:
 
     @pytest.mark.integration
     @patch("services.tts_service.processor.gTTS")
-    def test_text_to_speech_mock(self, mock_gtts_class):
+    @patch("services.tts_service.processor.os.path.exists")
+    def test_text_to_speech_mock(self, mock_exists, mock_gtts_class):
         """Test text to speech with mock"""
         from services.tts_service.processor import TTSProcessor
 
         mock_gtts = Mock()
         mock_gtts.save = Mock()
         mock_gtts_class.return_value = mock_gtts
+        mock_exists.return_value = True
 
         processor = TTSProcessor()
-
-        os.makedirs("/tmp", exist_ok=True)
 
         result = processor.generate_speech_async("Hello world", "/tmp/test.mp3")
 
