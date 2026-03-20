@@ -62,6 +62,18 @@ class SimpleSafeProcessor:
         except Exception as e:
             logger.error(f"Error sending to chat: {e}")
             return False
+
+    async def send_document_to_chat(
+        self, bot, chat_id: int, document_path: str, caption: str = None, parse_mode=None
+    ):
+        try:
+            with open(document_path, "rb") as doc:
+                await bot.send_document(
+                    chat_id=chat_id, document=doc, caption=caption, parse_mode=parse_mode
+                )
+            return True
+        except Exception as e:
+            logger.error(f"Error sending document to chat: {e}")
             return False
 
 
@@ -112,7 +124,21 @@ class TelegramBotService:
             try:
                 bot = self.application.bot
                 if result.status == TaskStatus.SUCCESS:
-                    if task_type == "image_gen" and result.result_data.get("file_path"):
+                    if task_type == "receipt" and result.result_data.get("file_path"):
+                        file_path = result.result_data.get("file_path")
+                        logger.info(
+                            f"Sending receipt PDF to chat {chat_id}, file_path: {file_path}"
+                        )
+                        loop.run_until_complete(
+                            self.safe_processor.send_document_to_chat(
+                                bot,
+                                chat_id,
+                                file_path,
+                                caption="✅ **Товарный чек готов!**",
+                                parse_mode="Markdown",
+                            )
+                        )
+                    elif task_type == "image_gen" and result.result_data.get("file_path"):
                         file_path = result.result_data.get("file_path")
                         logger.info(f"Sending image to chat {chat_id}, file_path: {file_path}")
                         loop.run_until_complete(
@@ -457,7 +483,9 @@ class TelegramBotService:
         if context.user_data.get("receipt_creating"):
             from . import receipt_handlers
 
-            await receipt_handlers.process_receipt_items(update, context, text)
+            await receipt_handlers.process_receipt_items(
+                update, context, text, self.pending_tasks, self.chat_id_to_user_id
+            )
             return
 
         if await settings_handlers.handle_negative_prompt_input(update, context, user_id):

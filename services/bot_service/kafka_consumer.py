@@ -25,6 +25,7 @@ class ResultConsumer:
                     self.config.topics["results_transcribe"],
                     self.config.topics["results_tts"],
                     self.config.topics["results_image_gen"],
+                    self.config.topics["results_receipt"],
                     bootstrap_servers=self.config.bootstrap_servers,
                     client_id=f"{self.config.client_id}_consumer",
                     value_deserializer=lambda v: v.decode("utf-8"),

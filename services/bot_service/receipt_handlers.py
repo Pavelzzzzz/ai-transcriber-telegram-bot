@@ -191,7 +191,11 @@ async def cancel_receipt_creation(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def process_receipt_items(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, items_text: str
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    items_text: str,
+    pending_tasks: dict = None,
+    chat_id_to_user_id: dict = None,
 ):
     from services.common.kafka_config import kafka_config
 
@@ -207,6 +211,12 @@ async def process_receipt_items(
         items_text=items_text,
     )
     producer.send_task(task)
+
+    if pending_tasks is not None:
+        pending_tasks[task.task_id] = {"chat_id": chat_id, "task_type": "receipt"}
+
+    if chat_id_to_user_id is not None:
+        chat_id_to_user_id[str(chat_id)] = str(user_id)
 
     context.user_data.pop("receipt_creating", None)
     context.user_data.pop("receipt_items", None)

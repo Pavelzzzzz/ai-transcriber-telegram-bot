@@ -14,7 +14,7 @@ class ReceiptProcessor:
             ReceiptGenerator(output_dir=output_dir) if output_dir else ReceiptGenerator()
         )
 
-    async def process_receipt(self, items_text: str, user_id: int) -> dict[str, Any]:
+    def process_receipt_sync(self, items_text: str, user_id: int) -> dict[str, Any]:
         parsed_items = parse_items_input(items_text)
 
         if not parsed_items:
@@ -62,7 +62,10 @@ class ReceiptProcessor:
             "missing_count": len(missing_articles),
         }
 
-    async def generate_receipt_pdf(
+    async def process_receipt(self, items_text: str, user_id: int) -> dict[str, Any]:
+        return self.process_receipt_sync(items_text, user_id)
+
+    def generate_receipt_pdf_sync(
         self,
         items: list[dict[str, Any]],
         unknown_items: list[dict[str, Any]] | None = None,
@@ -70,6 +73,13 @@ class ReceiptProcessor:
         if unknown_items:
             return self.generator.generate_receipt_with_unknown(items, unknown_items)
         return self.generator.generate_receipt_pdf(items)
+
+    async def generate_receipt_pdf(
+        self,
+        items: list[dict[str, Any]],
+        unknown_items: list[dict[str, Any]] | None = None,
+    ) -> str:
+        return self.generate_receipt_pdf_sync(items, unknown_items)
 
     def validate_items_text_sync(self, text: str) -> dict[str, Any]:
         parsed = parse_items_input(text)

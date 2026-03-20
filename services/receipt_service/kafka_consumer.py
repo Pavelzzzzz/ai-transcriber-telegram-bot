@@ -67,10 +67,6 @@ class ReceiptKafkaConsumer:
                 time.sleep(1)
 
     def _process_loop(self):
-        self._executor = asyncio.new_event_loop()
-        self._async_loop = self._executor
-        asyncio.set_event_loop(self._executor)
-
         while self._running:
             try:
                 task = self._task_queue.get(timeout=1)
@@ -80,32 +76,71 @@ class ReceiptKafkaConsumer:
 
                 logger.info(f"Processing receipt task: {task.task_id}")
 
-                future = self._executor.run_in_executor(None, self._run_task_sync, task)
-                self._pending_tasks[task.task_id] = future
+                result = self._process_task_sync(task)
 
-                future.add_done_callback(lambda f, tid=task.task_id: self._cleanup_task(tid, f))
+                if result and self.result_sender:
+                    self.result_sender(result)
+                    logger.info(f"Result sent for task {task.task_id}")
 
             except queue.Empty:
                 continue
             except Exception as e:
                 logger.error(f"Error in process loop: {e}")
 
-    def _run_task_sync(self, task: TaskMessage) -> ResultMessage:
-        return self._async_loop.run_until_complete(self._process_task_async(task))
-
-    def _cleanup_task(self, task_id: str, future: Future):
+    def _process_task_sync(self, task: TaskMessage) -> ResultMessage:
         try:
-            if future.done() and not future.cancelled():
-                result = future.result()
-                if result and self.result_sender:
-                    self.result_sender(result)
-                    logger.info(f"Result sent for task {task_id}")
+            items_text = task.file_path or ""
+            unknown_items_data = task.metadata.get("unknown_items", []) if task.metadata else []
+
+            logger.info(f"Processing receipt task {task.task_id} for user {task.user_id}")
+
+            result = self.processor.process_receipt_sync(items_text, task.user_id)
+
+            if result["status"] == "error":
+                return ResultMessage(
+                    task_id=task.task_id,
+                    status=TaskStatus.FAILED,
+                    result_type="receipt",
+                    result_data={},
+                    error=result.get("message", "Processing failed"),
+                )
+
+            unknown_items = [
+                {
+                    "article": item["article"],
+                    "name": item["name"],
+                    "quantity": item["quantity"],
+                    "price": item.get("price", 0.0),
+                }
+                for item in unknown_items_data
+            ]
+
+            pdf_path = self.processor.generate_receipt_pdf_sync(result["items"], unknown_items)
+
+            logger.info(f"Receipt generated: {pdf_path}")
+
+            return ResultMessage(
+                task_id=task.task_id,
+                status=TaskStatus.SUCCESS,
+                result_type="receipt",
+                result_data={
+                    "file_path": pdf_path,
+                    "items_count": result["items_count"],
+                    "missing_count": result["missing_count"],
+                    "missing_articles": result.get("missing_articles", []),
+                    "total": result["total"],
+                },
+            )
+
         except Exception as e:
-            logger.error(f"Error sending result for task {task_id}: {e}")
-        finally:
-            if task_id in self._pending_tasks:
-                del self._pending_tasks[task_id]
-            logger.info(f"Task {task_id} removed from pending queue")
+            logger.error(f"Error processing receipt {task.task_id}: {e}")
+            return ResultMessage(
+                task_id=task.task_id,
+                status=TaskStatus.FAILED,
+                result_type="receipt",
+                result_data={},
+                error=str(e),
+            )
 
     async def _process_task_async(self, task: TaskMessage) -> ResultMessage:
         try:
