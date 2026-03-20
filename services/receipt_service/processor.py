@@ -8,9 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 class ReceiptProcessor:
-    def __init__(self):
+    def __init__(self, output_dir: str | None = None):
         self.wb_client = WBClient()
-        self.generator = ReceiptGenerator()
+        self.generator = (
+            ReceiptGenerator(output_dir=output_dir) if output_dir else ReceiptGenerator()
+        )
 
     async def process_receipt(self, items_text: str, user_id: int) -> dict[str, Any]:
         parsed_items = parse_items_input(items_text)
@@ -69,7 +71,7 @@ class ReceiptProcessor:
             return self.generator.generate_receipt_with_unknown(items, unknown_items)
         return self.generator.generate_receipt_pdf(items)
 
-    async def validate_items_text(self, text: str) -> dict[str, Any]:
+    def validate_items_text_sync(self, text: str) -> dict[str, Any]:
         parsed = parse_items_input(text)
 
         if not parsed:
@@ -85,3 +87,6 @@ class ReceiptProcessor:
             "count": len(parsed),
             "items": parsed,
         }
+
+    async def validate_items_text(self, text: str) -> dict[str, Any]:
+        return self.validate_items_text_sync(text)
