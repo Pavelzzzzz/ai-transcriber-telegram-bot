@@ -560,7 +560,10 @@ class TelegramBotService:
         application.add_handler(CommandHandler("receipt", receipt_handlers.receipt_command))
 
         application.add_handler(
-            CallbackQueryHandler(settings_handlers.settings_callback, pattern="^settings:")
+            CallbackQueryHandler(
+                settings_handlers.settings_callback,
+                pattern="^settings:(back|reset|model|style|aspect|variations|negative|noise)$",
+            )
         )
         application.add_handler(
             CallbackQueryHandler(receipt_handlers.receipt_callback, pattern="^receipt:")

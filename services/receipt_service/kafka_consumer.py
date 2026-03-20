@@ -1,83 +1,123 @@
 import asyncio
 import json
 import logging
-import signal
-import sys
-from datetime import datetime
+import queue
+import time
+from concurrent.futures import Future
+from threading import Thread
 
-from confluent_kafka import Consumer, Producer
-
-sys.path.insert(0, "/home/pavel/Documents/python/ai-transcriber-telegram-bot")
-
-from services.common.kafka_config import KafkaConfig
-from services.common.schemas import ResultMessage, TaskStatus, TaskType
-
+from ..common import ResultMessage, TaskMessage, TaskStatus
 from .processor import ReceiptProcessor
 
 logger = logging.getLogger(__name__)
 
+MAX_WORKERS = 2
+POLL_TIMEOUT_MS = 5000
+
 
 class ReceiptKafkaConsumer:
-    def __init__(self, config: KafkaConfig | None = None):
-        self.config = config or KafkaConfig.from_env()
-        self.processor = ReceiptProcessor()
+    def __init__(self, config, result_sender=None, processor=None):
+        self.config = config
+        self.result_sender = result_sender
+        self.processor = processor if processor else ReceiptProcessor()
+        self._consumer = None
         self._running = False
-        self._loop: asyncio.AbstractEventLoop | None = None
+        self._poll_thread: Thread | None = None
+        self._process_thread: Thread | None = None
+        self._task_queue: queue.Queue = queue.Queue()
+        self._executor = None
+        self._pending_tasks: dict[str, Future] = {}
+        self._async_loop: asyncio.AbstractEventLoop | None = None
 
-        self.consumer = Consumer(
-            {
-                "bootstrap.servers": self.config.bootstrap_servers,
-                "group.id": f"{self.config.client_id}_receipt_group",
-                "auto.offset.reset": "earliest",
-                "enable.auto.commit": True,
-                "session.timeout.ms": 30000,
-                "heartbeat.interval.ms": 10000,
-            }
-        )
+    def _get_consumer(self):
+        if self._consumer is None:
+            from kafka import KafkaConsumer
 
-        self.producer = Producer({"bootstrap.servers": self.config.bootstrap_servers})
-
-    def _get_async_loop(self) -> asyncio.AbstractEventLoop:
-        if self._loop is None or self._loop.is_closed():
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-        return self._loop
-
-    def _send_result(self, result: ResultMessage):
-        try:
-            topic = self.config.topics.get("results_receipt", "results.receipt")
-            self.producer.produce(
-                topic,
-                key=result.task_id.encode("utf-8"),
-                value=result.to_json().encode("utf-8"),
-                callback=self._delivery_callback,
+            self._consumer = KafkaConsumer(
+                self.config.topics["tasks_receipt"],
+                bootstrap_servers=self.config.bootstrap_servers,
+                client_id=f"{self.config.client_id}_receipt_consumer",
+                value_deserializer=lambda v: v.decode("utf-8"),
+                auto_offset_reset="earliest",
+                group_id=f"{self.config.client_id}_receipt_group",
+                session_timeout_ms=30000,
+                heartbeat_interval_ms=10000,
             )
-            self.producer.poll(0)
-        except Exception as e:
-            logger.error(f"Failed to send result: {e}")
+        return self._consumer
 
-    def _delivery_callback(self, err, msg):
-        if err:
-            logger.error(f"Message delivery failed: {err}")
-        else:
-            logger.debug(f"Message delivered to {msg.topic()}")
+    def _poll_loop(self):
+        consumer = self._get_consumer()
 
-    async def _process_message(self, message_data: dict) -> ResultMessage:
-        task_id = message_data.get("task_id", "")
-        user_id = message_data.get("user_id", 0)
-        chat_id = message_data.get("chat_id", 0)
+        while self._running:
+            try:
+                messages = consumer.poll(timeout_ms=POLL_TIMEOUT_MS)
 
-        items_text = message_data.get("file_path", "")
-        unknown_items_data = message_data.get("metadata", {}).get("unknown_items", [])
+                for topic_partition, records in messages.items():
+                    for record in records:
+                        try:
+                            task = TaskMessage.from_json(record.value)
+                            if task.task_type == TaskStatus.RECEIPT:
+                                logger.debug(f"Polled task: {task.task_id}")
+                                self._task_queue.put(task)
+                        except Exception as e:
+                            logger.error(f"Error parsing message: {e}")
 
+            except Exception as e:
+                logger.error(f"Error in poll loop: {e}")
+                time.sleep(1)
+
+    def _process_loop(self):
+        self._executor = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._executor)
+
+        while self._running:
+            try:
+                task = self._task_queue.get(timeout=1)
+
+                if task is None:
+                    continue
+
+                logger.info(f"Processing receipt task: {task.task_id}")
+
+                future = self._executor.run_in_executor(None, self._run_task_sync, task)
+                self._pending_tasks[task.task_id] = future
+
+                future.add_done_callback(lambda f, tid=task.task_id: self._cleanup_task(tid, f))
+
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Error in process loop: {e}")
+
+    def _run_task_sync(self, task: TaskMessage) -> ResultMessage:
+        return self._async_loop.run_until_complete(self._process_task_async(task))
+
+    def _cleanup_task(self, task_id: str, future: Future):
         try:
-            logger.info(f"Processing receipt task {task_id} for user {user_id}")
+            if future.done() and not future.cancelled():
+                result = future.result()
+                if result and self.result_sender:
+                    self.result_sender(result)
+                    logger.info(f"Result sent for task {task_id}")
+        except Exception as e:
+            logger.error(f"Error sending result for task {task_id}: {e}")
+        finally:
+            if task_id in self._pending_tasks:
+                del self._pending_tasks[task_id]
+            logger.info(f"Task {task_id} removed from pending queue")
 
-            result = await self.processor.process_receipt(items_text, user_id)
+    async def _process_task_async(self, task: TaskMessage) -> ResultMessage:
+        try:
+            items_text = task.file_path or ""
+            unknown_items_data = task.metadata.get("unknown_items", []) if task.metadata else []
+
+            logger.info(f"Processing receipt task {task.task_id} for user {task.user_id}")
+
+            result = await self.processor.process_receipt(items_text, task.user_id)
 
             if result["status"] == "error":
                 return ResultMessage(
-                    task_id=task_id,
+                    task_id=task.task_id,
                     status=TaskStatus.FAILED,
                     result_type="receipt",
                     result_data={},
@@ -97,7 +137,7 @@ class ReceiptKafkaConsumer:
             pdf_path = await self.processor.generate_receipt_pdf(result["items"], unknown_items)
 
             return ResultMessage(
-                task_id=task_id,
+                task_id=task.task_id,
                 status=TaskStatus.SUCCESS,
                 result_type="receipt",
                 result_data={
@@ -110,51 +150,47 @@ class ReceiptKafkaConsumer:
             )
 
         except Exception as e:
-            logger.error(f"Error processing receipt {task_id}: {e}")
+            logger.error(f"Error processing receipt {task.task_id}: {e}")
             return ResultMessage(
-                task_id=task_id,
+                task_id=task.task_id,
                 status=TaskStatus.FAILED,
                 result_type="receipt",
                 result_data={},
                 error=str(e),
             )
 
-    def _handle_message(self, msg):
-        try:
-            message_data = json.loads(msg.value().decode("utf-8"))
-
-            if message_data.get("task_type") != TaskType.RECEIPT.value:
-                logger.warning(f"Received non-receipt message: {message_data.get('task_type')}")
-                return
-
-            loop = self._get_async_loop()
-            result = loop.run_until_complete(self._process_message(message_data))
-            self._send_result(result)
-
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode message: {e}")
-        except Exception as e:
-            logger.error(f"Error handling message: {e}")
-
     def start(self):
-        self._running = True
-        topic = self.config.topics.get("tasks_receipt", "tasks.receipt")
-        self.consumer.subscribe([topic])
-        logger.info(f"Subscribed to topic: {topic}")
+        if self._running:
+            return
 
-        try:
-            while self._running:
-                msg = self.consumer.poll(timeout=1.0)
-                if msg is not None and not msg.error():
-                    self._handle_message(msg)
-        except KeyboardInterrupt:
-            logger.info("Shutting down...")
-        finally:
-            self.stop()
+        self._running = True
+
+        self._poll_thread = Thread(target=self._poll_loop, daemon=True)
+        self._poll_thread.start()
+
+        self._process_thread = Thread(target=self._process_loop, daemon=True)
+        self._process_thread.start()
+
+        logger.info("Receipt consumer started")
 
     def stop(self):
         self._running = False
-        if self._loop and not self._loop.is_closed():
-            self._loop.close()
-        self.consumer.close()
-        logger.info("Consumer stopped")
+
+        self._task_queue.put(None)
+
+        if self._poll_thread:
+            self._poll_thread.join(timeout=5)
+        if self._process_thread:
+            self._process_thread.join(timeout=5)
+
+        if self._executor and not self._executor.is_closed():
+            self._executor.close()
+
+        if self._async_loop and not self._async_loop.is_closed():
+            self._async_loop.close()
+
+        if self._consumer:
+            self._consumer.close()
+            self._consumer = None
+
+        logger.info("Receipt consumer stopped")
