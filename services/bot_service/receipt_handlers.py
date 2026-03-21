@@ -224,7 +224,31 @@ def get_wb_product_name_from_url(url: str) -> str | None:
 
 
 async def _fetch_wb_products_async(articles: list[str]) -> dict:
-    return {}
+    """Fetch product info from Wildberries for multiple articles."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    results = {}
+    if not articles:
+        return results
+
+    def fetch_single(article: str) -> tuple[str, dict | None]:
+        try:
+            info = get_wb_product_info_from_article(article)
+            return article, info
+        except Exception as e:
+            logger.warning(f"Failed to fetch article {article}: {e}")
+            return article, None
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = list(executor.map(fetch_single, articles))
+
+    for article, info in futures:
+        if info:
+            results[article] = info
+        else:
+            results[article] = {"error": "not found"}
+
+    return results
 
 
 async def receipt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -448,3 +448,24 @@ class TestShowReceiptPreviewWithPrices:
         source = inspect.getsource(show_receipt_preview)
         assert "item_sum" in source
         assert "price *" in source
+
+
+class TestFetchWbProductsAsync:
+    def test_fetch_wb_products_async_returns_dict(self):
+        import inspect
+
+        from services.bot_service.receipt_handlers import _fetch_wb_products_async
+
+        source = inspect.getsource(_fetch_wb_products_async)
+        assert "get_wb_product_info_from_article" in source
+        assert "ThreadPoolExecutor" in source
+
+    def test_fetch_wb_products_async_empty_list(self):
+        import asyncio
+
+        from services.bot_service.receipt_handlers import _fetch_wb_products_async
+
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(_fetch_wb_products_async([]))
+        loop.close()
+        assert result == {}
