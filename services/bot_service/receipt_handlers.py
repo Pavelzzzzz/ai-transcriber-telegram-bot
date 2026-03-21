@@ -15,9 +15,9 @@ from services.common.user_settings_repo import (
 logger = logging.getLogger(__name__)
 
 
-def parse_items_input(text: str) -> list[dict[str, str | int]]:
-    items: list[dict[str, str | int]] = []
-    article_pattern = re.compile(r"^(.+?)\s*[xXхХ]\s*(\d+)$")
+def parse_items_input(text: str) -> list[dict[str, str | int | float]]:
+    items: list[dict[str, str | int | float]] = []
+    article_pattern = re.compile(r"^(.+?)\s*[xXхХ]\s*(\d+)(?:\s*[xXхХ]\s*(\d+(?:[.,]\d+)?))?$")
 
     for line in text.strip().split("\n"):
         line = line.strip()
@@ -30,6 +30,8 @@ def parse_items_input(text: str) -> list[dict[str, str | int]]:
 
         raw = match.group(1).strip()
         quantity = int(match.group(2))
+        price_str = match.group(3)
+        price = float(price_str.replace(",", ".")) if price_str else 0.0
 
         if quantity <= 0:
             continue
@@ -40,7 +42,7 @@ def parse_items_input(text: str) -> list[dict[str, str | int]]:
             article = raw
 
         if article and article.isdigit():
-            items.append({"article": article, "quantity": quantity})
+            items.append({"article": article, "quantity": quantity, "price": price})
 
     return items
 
@@ -52,14 +54,14 @@ def extract_article_from_url_static(url: str) -> str | None:
     return None
 
 
-def get_wb_product_name_from_article(article: str) -> str | None:
-    """Get product name from wildberries.by by article number.
+def get_wb_product_info_from_article(article: str) -> dict | None:
+    """Get product name and price from wildberries.by by article number.
 
     Args:
         article: Product article number (e.g., '178601980')
 
     Returns:
-        Product name or None if not found
+        Dict with 'name' and 'price' keys, or None if not found
     """
     try:
         from playwright.sync_api import sync_playwright
@@ -76,8 +78,9 @@ def get_wb_product_name_from_article(article: str) -> str | None:
             page.wait_for_timeout(2000)
 
             product_name = None
+            product_price = 0.0
 
-            selectors_to_try = [
+            name_selectors = [
                 "h1.product-page__product-name",
                 ".product-page__title",
                 "[data-link='product-name']",
@@ -85,7 +88,7 @@ def get_wb_product_name_from_article(article: str) -> str | None:
                 ".product-title",
             ]
 
-            for selector in selectors_to_try:
+            for selector in name_selectors:
                 try:
                     element = page.locator(selector).first
                     if element.count() > 0:
@@ -102,6 +105,38 @@ def get_wb_product_name_from_article(article: str) -> str | None:
                     if article and product_name.endswith(article):
                         product_name = product_name[: -len(article) - 1].strip()
 
+            price_selectors = [
+                "[class*='price']",
+                ".product-price",
+                ".price-block",
+                "[data-widget='webPrice']",
+            ]
+
+            for selector in price_selectors:
+                try:
+                    element = page.locator(selector).first
+                    if element.count() > 0:
+                        price_text = element.inner_text().strip()
+                        import re
+
+                        price_match = re.search(
+                            r"([\d\s]+[,.]\d+)\s*руб",
+                            price_text.replace(" ", "").replace("\xa0", ""),
+                        )
+                        if price_match:
+                            price_str = price_match.group(1).replace(",", ".")
+                            product_price = float(price_str)
+                            break
+                        price_match = re.search(
+                            r"([\d\s]+[,.]\d+)", price_text.replace(" ", "").replace("\xa0", "")
+                        )
+                        if price_match:
+                            price_str = price_match.group(1).replace(",", ".").replace(" ", "")
+                            product_price = float(price_str)
+                            break
+                except Exception:
+                    continue
+
             browser.close()
 
             if product_name:
@@ -112,11 +147,24 @@ def get_wb_product_name_from_article(article: str) -> str | None:
             ):
                 return None
 
-            return product_name
+            return {"name": product_name, "price": product_price}
 
     except Exception as e:
-        logger.warning(f"Failed to get product name for article {article}: {e}")
+        logger.warning(f"Failed to get product info for article {article}: {e}")
         return None
+
+
+def get_wb_product_name_from_article(article: str) -> str | None:
+    """Get product name from wildberries.by by article number.
+
+    Args:
+        article: Product article number (e.g., '178601980')
+
+    Returns:
+        Product name or None if not found
+    """
+    info = get_wb_product_info_from_article(article)
+    return info.get("name") if info else None
 
 
 def get_wb_product_name_async(article: str) -> str | None:
@@ -137,6 +185,27 @@ def get_wb_product_name_async(article: str) -> str | None:
             return get_wb_product_name_from_article(article)
     except Exception:
         return get_wb_product_name_from_article(article)
+
+
+def get_wb_product_info_async(article: str) -> dict | None:
+    """Async wrapper for get_wb_product_info_from_article.
+
+    Runs Playwright in a thread pool to avoid blocking asyncio loop.
+    Returns dict with 'name' and 'price' keys.
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(get_wb_product_info_from_article, article)
+            return future.result(timeout=20)
+        else:
+            return get_wb_product_info_from_article(article)
+    except Exception:
+        return get_wb_product_info_from_article(article)
 
 
 def get_wb_product_name_from_url(url: str) -> str | None:
@@ -252,12 +321,14 @@ async def handle_create_receipt(update: Update, context: ContextTypes.DEFAULT_TY
     help_text = """📝 Создание товарного чека
 
 Введите товары в формате:
-<b>Артикул</b> x <b>Количество</b>
+<b>Артикул</b> x <b>Количество</b> x <b>Цена</b>
 
 Примеры:
-• 178601980 x 2
-• https://wildberries.ru/catalog/12345678/detail.aspx x 1
+• 178601980 x 2 x 150.50
+• 123456 x 1
+• https://wildberries.by/catalog/12345678/detail.aspx x 2 x 200
 
+💡 Цена опциональна (можно не указывать).
 💡 Можно указать несколько товаров - каждый с новой строки.
 
 📋 После ввода нажмите "Подтвердить" для создания чека."""
@@ -292,7 +363,7 @@ async def show_receipt_preview(update: Update, context: ContextTypes.DEFAULT_TYP
                 "article": p["article"],
                 "quantity": p["quantity"],
                 "name": f"Артикул {p['article']}",
-                "price": 0,
+                "price": p.get("price", 0),
             }
             for p in parsed
         ]
@@ -410,9 +481,9 @@ async def handle_add_item_to_draft(update: Update, context: ContextTypes.DEFAULT
     text = """➕ Добавление товара
 
 Введите товар в формате:
-<b>Артикул</b> x <b>Количество</b>
+<b>Артикул</b> x <b>Количество</b> x <b>Цена</b>
 
-Пример: 178601980 x 2"""
+Пример: 178601980 x 2 x 150.50"""
 
     keyboard = [
         [InlineKeyboardButton("🔙 Назад к предпросмотру", callback_data="receipt:preview")],
@@ -688,18 +759,26 @@ async def process_receipt_items(
         if parsed:
             draft = context.user_data.get("receipt_draft", {"items": [], "raw_input": ""})
             for p in parsed:
+                product_info = None
                 product_name = None
+                product_price = p.get("price", 0)
+
                 if p["article"].isdigit():
-                    logger.info(f"Fetching product name for article: {p['article']}")
-                    product_name = get_wb_product_name_async(p["article"])
-                    logger.info(f"Product name result: {product_name}")
+                    logger.info(f"Fetching product info for article: {p['article']}")
+                    product_info = get_wb_product_info_async(p["article"])
+                    logger.info(f"Product info result: {product_info}")
+
+                    if product_info:
+                        product_name = product_info.get("name")
+                        if product_price == 0 and product_info.get("price", 0) > 0:
+                            product_price = product_info.get("price", 0)
 
                 draft["items"].append(
                     {
                         "article": p["article"],
                         "quantity": p["quantity"],
                         "name": product_name or f"Артикул {p['article']}",
-                        "price": 0,
+                        "price": product_price,
                     }
                 )
             context.user_data["receipt_draft"] = draft
@@ -756,11 +835,13 @@ async def show_receipt_preview_from_message(update: Update, context: ContextType
 
     for item in items:
         if item.get("article", "").isdigit() and item.get("name", "").startswith("Артикул "):
-            logger.info(f"[preview] Fetching product name for article: {item['article']}")
-            product_name = get_wb_product_name_from_article(item["article"])
-            logger.info(f"[preview] Product name result: {product_name}")
-            if product_name:
-                item["name"] = product_name
+            logger.info(f"[preview] Fetching product info for article: {item['article']}")
+            product_info = get_wb_product_info_async(item["article"])
+            logger.info(f"[preview] Product info result: {product_info}")
+            if product_info:
+                item["name"] = product_info.get("name", item["name"])
+                if item.get("price", 0) == 0:
+                    item["price"] = product_info.get("price", 0)
 
     articles = [item["article"] for item in items]
     not_found_articles = []
@@ -780,11 +861,13 @@ async def show_receipt_preview_from_message(update: Update, context: ContextType
                 not_found_articles.append(article)
         else:
             if item.get("name", "").startswith("Артикул ") and article.isdigit():
-                logger.info(f"[preview] Fetching product name for article: {article}")
-                product_name = get_wb_product_name_async(article)
-                logger.info(f"[preview] Product name result: {product_name}")
-                if product_name:
-                    item["name"] = product_name
+                logger.info(f"[preview] Fetching product info for article: {article}")
+                product_info = get_wb_product_info_async(article)
+                logger.info(f"[preview] Product info result: {product_info}")
+                if product_info:
+                    item["name"] = product_info.get("name", item["name"])
+                    if item.get("price", 0) == 0:
+                        item["price"] = product_info.get("price", 0)
                 else:
                     not_found_articles.append(article)
             else:

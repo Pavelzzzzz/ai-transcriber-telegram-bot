@@ -163,6 +163,45 @@ class TestProcessReceiptItems:
         assert result[0]["quantity"] == 3
 
 
+class TestParseItemsInputWithPrice:
+    def test_parse_with_price(self):
+        from services.bot_service.receipt_handlers import parse_items_input
+
+        result = parse_items_input("123456 x 2 x 150.50")
+
+        assert len(result) == 1
+        assert result[0]["article"] == "123456"
+        assert result[0]["quantity"] == 2
+        assert result[0]["price"] == 150.50
+
+    def test_parse_with_price_comma(self):
+        from services.bot_service.receipt_handlers import parse_items_input
+
+        result = parse_items_input("123456 x 1 x 99,99")
+
+        assert len(result) == 1
+        assert result[0]["price"] == 99.99
+
+    def test_parse_without_price(self):
+        from services.bot_service.receipt_handlers import parse_items_input
+
+        result = parse_items_input("123456 x 2")
+
+        assert len(result) == 1
+        assert result[0]["article"] == "123456"
+        assert result[0]["quantity"] == 2
+        assert result[0]["price"] == 0.0
+
+    def test_parse_multiple_items_with_prices(self):
+        from services.bot_service.receipt_handlers import parse_items_input
+
+        result = parse_items_input("123456 x 2 x 100\n789012 x 1 x 250.50")
+
+        assert len(result) == 2
+        assert result[0]["price"] == 100.0
+        assert result[1]["price"] == 250.50
+
+
 class TestKafkaProducerReceiptIntegration:
     def test_create_receipt_task_returns_valid_task(self):
         from unittest.mock import MagicMock
@@ -382,3 +421,30 @@ class TestHandleConfirmReceipt:
         source = inspect.getsource(handle_confirm_receipt)
         assert "kafka_config" in source
         assert "TaskProducer" in source
+
+
+class TestShowReceiptPreviewWithPrices:
+    def test_preview_preserves_prices_from_input(self):
+        import inspect
+
+        from services.bot_service.receipt_handlers import show_receipt_preview
+
+        source = inspect.getsource(show_receipt_preview)
+        assert 'price": p.get("price", 0)' in source or 'price": p["price"]' in source
+
+    def test_preview_item_has_price_key(self):
+        import inspect
+
+        from services.bot_service.receipt_handlers import show_receipt_preview
+
+        source = inspect.getsource(show_receipt_preview)
+        assert '"price"' in source
+
+    def test_preview_calculates_item_sum_with_price(self):
+        import inspect
+
+        from services.bot_service.receipt_handlers import show_receipt_preview
+
+        source = inspect.getsource(show_receipt_preview)
+        assert "item_sum" in source
+        assert "price *" in source
