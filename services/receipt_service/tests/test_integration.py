@@ -127,116 +127,38 @@ class TestReceiptProcessorIntegration:
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
         assert processor is not None
-        assert processor.wb_client is not None
         assert processor.generator is not None
 
     @pytest.mark.integration
-    def test_processor_validate_items_text_valid(self, tmp_path):
+    def test_processor_process_receipt_json_valid(self, tmp_path):
         from services.receipt_service.processor import ReceiptProcessor
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("123456 x 2\n789012 x 1")
-        assert result["valid"] is True
-        assert result["count"] == 2
+        items_json = '[{"article": "123456", "name": "Test", "price": 100, "quantity": 2}]'
+        result = processor.process_receipt_sync(items_json, user_id=123)
+
+        assert result["status"] == "success"
+        assert result["items_count"] == 1
+        assert result["total"] == 200
 
     @pytest.mark.integration
-    def test_processor_validate_items_text_invalid(self, tmp_path):
+    def test_processor_process_receipt_json_invalid(self, tmp_path):
         from services.receipt_service.processor import ReceiptProcessor
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("invalid text")
-        assert result["valid"] is False
-        assert result["count"] == 0
+        result = processor.process_receipt_sync("not valid json", user_id=123)
+        assert result["status"] == "error"
 
     @pytest.mark.integration
-    def test_processor_validate_items_text_empty(self, tmp_path):
+    def test_processor_process_receipt_empty(self, tmp_path):
         from services.receipt_service.processor import ReceiptProcessor
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("")
-        assert result["valid"] is False
-
-
-class TestWBClientIntegration:
-    """Integration tests for Wildberries client"""
-
-    @pytest.mark.integration
-    def test_wb_client_init(self):
-        from services.receipt_service.wb_client import WBClient
-
-        client = WBClient()
-        assert client is not None
-
-    @pytest.mark.integration
-    def test_extract_article_from_url(self):
-        from services.receipt_service.wb_client import WBClient
-
-        client = WBClient()
-
-        article = client.extract_article_from_url(
-            "https://www.wildberries.ru/catalog/12345678/detail.aspx"
-        )
-        assert article == "12345678"
-
-    @pytest.mark.integration
-    def test_extract_article_from_short_url(self):
-        from services.receipt_service.wb_client import WBClient
-
-        client = WBClient()
-
-        article = client.extract_article_from_url("https://wb.ru/catalog/87654321")
-        assert article == "87654321"
-
-
-class TestParseItemsInputIntegration:
-    """Integration tests for items input parsing"""
-
-    @pytest.mark.integration
-    def test_parse_single_article(self):
-        from services.receipt_service.wb_client import parse_items_input
-
-        result = parse_items_input("123456 x 1")
-        assert len(result) == 1
-        assert result[0]["article"] == "123456"
-        assert result[0]["quantity"] == 1
-
-    @pytest.mark.integration
-    def test_parse_multiple_items(self):
-        from services.receipt_service.wb_client import parse_items_input
-
-        result = parse_items_input("123456 x 2\n789012 x 3")
-        assert len(result) == 2
-        assert result[0]["article"] == "123456"
-        assert result[0]["quantity"] == 2
-        assert result[1]["article"] == "789012"
-        assert result[1]["quantity"] == 3
-
-    @pytest.mark.integration
-    def test_parse_with_spaces(self):
-        from services.receipt_service.wb_client import parse_items_input
-
-        result = parse_items_input("  123456  x  2  ")
-        assert len(result) == 1
-        assert result[0]["article"] == "123456"
-        assert result[0]["quantity"] == 2
-
-    @pytest.mark.integration
-    def test_parse_empty_text(self):
-        from services.receipt_service.wb_client import parse_items_input
-
-        result = parse_items_input("")
-        assert len(result) == 0
-
-    @pytest.mark.integration
-    def test_parse_with_cyrillic_x(self):
-        from services.receipt_service.wb_client import parse_items_input
-
-        result = parse_items_input("123456 х 2")
-        assert len(result) == 1
-        assert result[0]["quantity"] == 2
+        result = processor.process_receipt_sync("[]", user_id=123)
+        assert result["status"] == "error"
 
 
 class TestReceiptGeneratorIntegration:
@@ -303,14 +225,12 @@ class TestReceiptCreationFlow:
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        items_text = "123456 x 2\n789012 x 1"
-        result = processor.validate_items_text_sync(items_text)
+        items_json = '[{"article": "123456", "name": "Test", "price": 100, "quantity": 2}]'
+        result = processor.process_receipt_sync(items_json, user_id=123)
 
-        assert result["valid"] is True
-        assert result["count"] == 2
-        assert "items" in result
+        assert result["status"] == "success"
+        assert result["items_count"] == 1
         assert result["items"][0]["article"] == "123456"
-        assert result["items"][0]["quantity"] == 2
 
     @pytest.mark.integration
     def test_receipt_creation_with_invalid_items(self, tmp_path):
@@ -318,10 +238,9 @@ class TestReceiptCreationFlow:
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("invalid text")
+        result = processor.process_receipt_sync("not json", user_id=123)
 
-        assert result["valid"] is False
-        assert result["count"] == 0
+        assert result["status"] == "error"
 
     @pytest.mark.integration
     def test_receipt_pdf_generation_with_items(self, tmp_path):
@@ -385,27 +304,27 @@ class TestReceiptCreationFlow:
         os.remove(pdf_path)
 
     @pytest.mark.integration
-    def test_receipt_validation_valid_input(self, tmp_path):
+    def test_receipt_process_json_valid_input(self, tmp_path):
         from services.receipt_service.processor import ReceiptProcessor
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("123456 x 2\n789012 x 3")
+        items_json = '[{"article": "123", "name": "A", "price": 10, "quantity": 1}, {"article": "456", "name": "B", "price": 20, "quantity": 1}]'
+        result = processor.process_receipt_sync(items_json, user_id=123)
 
-        assert result["valid"] is True
-        assert result["count"] == 2
-        assert "items" in result
+        assert result["status"] == "success"
+        assert result["items_count"] == 2
+        assert result["total"] == 30
 
     @pytest.mark.integration
-    def test_receipt_validation_empty_input(self, tmp_path):
+    def test_receipt_process_empty_list(self, tmp_path):
         from services.receipt_service.processor import ReceiptProcessor
 
         processor = ReceiptProcessor(output_dir=str(tmp_path))
 
-        result = processor.validate_items_text_sync("")
+        result = processor.process_receipt_sync("[]", user_id=123)
 
-        assert result["valid"] is False
-        assert result["count"] == 0
+        assert result["status"] == "error"
 
     @pytest.mark.integration
     def test_receipt_total_calculation(self, tmp_path):

@@ -273,3 +273,43 @@ def delete_receipt_history(receipt_id: int, user_id: int) -> bool:
     except Exception as e:
         logger.error(f"Error deleting receipt history: {e}")
         return False
+
+
+def create_receipt_history(
+    user_id: int,
+    items: list[dict],
+    total: float,
+    file_path: str | None = None,
+) -> ReceiptHistory | None:
+    return add_receipt_history(user_id, items, total, file_path)
+
+
+def update_receipt_history(
+    receipt_id: int,
+    user_id: int,
+    items: list[dict] | None = None,
+    total: float | None = None,
+    file_path: str | None = None,
+) -> bool:
+    try:
+        with get_db() as db:
+            receipt = (
+                db.query(ReceiptHistory)
+                .filter(ReceiptHistory.id == receipt_id, ReceiptHistory.user_id == user_id)
+                .first()
+            )
+            if not receipt:
+                return False
+
+            if items is not None:
+                receipt.items = items
+            if total is not None:
+                receipt.total = total
+            if file_path is not None:
+                receipt.file_path = file_path
+
+            db.commit()
+            return True
+    except Exception as e:
+        logger.error(f"Error updating receipt history: {e}")
+        return False

@@ -24,10 +24,11 @@ AI Transcriber - это микросервисный Telegram-бот, испол
   - Количество вариаций: 1-4
   - Negative prompt
 - 🧾 **Товарные чеки WB** - Генерация товарных чеков для Wildberries (РБ)
-  - Поиск товаров по артикулам WB
-  - Поддержка ссылок WB
+  - Ввод товаров по артикулам или ссылкам WB
+  - Редактирование названий товаров в предпросмотре
   - Генерация PDF в формате товарного чека РБ
   - Сохранение истории чеков
+  - Асинхронная обработка через Kafka
 - ⚡ **Масштабируемость** - Независимое масштабирование сервисов
 - 🌍 **Мультиязычность** - Поддержка русского, английского и других языков
 - 🔔 **Уведомления** - Kafka topic для push-уведомлений пользователям
@@ -48,8 +49,11 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │  │             │ │   cribe     │ │             │ │    _gen     │  │
 │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘  │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐  │
-│  │results.ocr  │ │results.tran│ │results.tts  │ │results.ima- │  │
-│  │             │ │   scribe   │ │             │ │    ge_gen   │  │
+│  │tasks.receipt│ │             │ │             │ │             │  │
+│  └─────────────┘ │results.ocr  │ │results.tts  │ │results.ima- │  │
+│  ┌─────────────┐ │             │ │             │ │    ge_gen   │  │
+│  │results.re-  │ │results.tran│ │             │ │             │  │
+│  │   ceipt     │ │   scribe   │ │             │ │             │  │
 │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘  │
 │                               ┌─────────────┐                       │
 │                               │ notifications │                      │
@@ -61,7 +65,7 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 ┌──────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────────┐  ┌──────────┐
 │   OCR    │  │ TRANSCRIBE  │  │   TTS    │  │ IMAGE_GEN   │  │ RECEIPT  │
 │ Service  │  │  Service    │  │ Service  │  │  Service    │  │ Service  │
-│(RapidOCR)│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │  │(WB API)  │
+│(RapidOCR)│  │ (Whisper)   │  │  (gTTS)  │  │(SD/FLUX)    │  │ (PDF)    │
 └──────────┘  └──────────────┘  └──────────┘  └──────────────┘  └──────────┘
                                     │
                                     ▼
@@ -91,8 +95,7 @@ AI Transcriber - это микросервисный Telegram-бот, испол
 │   │   └── kafka_consumer.py
 │   ├── receipt_service/          # Товарные чеки WB
 │   │   ├── main.py
-│   │   ├── processor.py         # Логика обработки
-│   │   ├── wb_client.py        # WB API клиент
+│   │   ├── processor.py         # Логика обработки (JSON вход)
 │   │   ├── receipt_generator.py # Генерация PDF
 │   │   └── kafka_consumer.py
 │   └── common/                  # Общие модули
@@ -209,7 +212,7 @@ TTS_LANGUAGE=ru
 | `results.transcribe` | → | bot_service |
 | `results.tts` | → | bot_service |
 | `results.image_gen` | → | bot_service |
-| `results.receipt` | → | bot_service |
+| `results_receipt` | → | bot_service |
 | `notifications` | → | bot_service |
 
 ## 🎮 Использование
@@ -248,9 +251,12 @@ https://wildberries.ru/catalog/11111111/detail.aspx x 3
 ```
 
 **Возможности:**
-- Поиск товаров по артикулам WB через публичный API
-- Парсинг ссылок WB
+- Ввод товаров по артикулам или ссылкам WB
+- Предпросмотр чека перед подтверждением
+- ✏️ Редактирование названий товаров в предпросмотре
+- ➕ Добавление и удаление товаров
 - Генерация PDF в формате товарного чека РБ
+- Асинхронная обработка через Kafka
 - Сохранение истории чеков
 
 ### Настройки генерации (/settings)

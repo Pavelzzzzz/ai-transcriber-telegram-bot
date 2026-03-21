@@ -126,6 +126,16 @@ class TelegramBotService:
                 if result.status == TaskStatus.SUCCESS:
                     if task_type == "receipt" and result.result_data.get("file_path"):
                         file_path = result.result_data.get("file_path")
+                        missing_count = result.result_data.get("missing_count", 0)
+                        missing_articles = result.result_data.get("missing_articles", [])
+
+                        caption = "✅ **Товарный чек готов!**"
+                        if missing_count > 0:
+                            articles_str = ", ".join(missing_articles[:5])
+                            if missing_count > 5:
+                                articles_str += f" и ещё {missing_count - 5}"
+                            caption = f"⚠️ **Товарный чек готов!**\n\n❌ Не найдено на WB ({missing_count} шт.): {articles_str}"
+
                         logger.info(
                             f"Sending receipt PDF to chat {chat_id}, file_path: {file_path}"
                         )
@@ -134,7 +144,7 @@ class TelegramBotService:
                                 bot,
                                 chat_id,
                                 file_path,
-                                caption="✅ **Товарный чек готов!**",
+                                caption=caption,
                                 parse_mode="Markdown",
                             )
                         )
@@ -653,6 +663,8 @@ class TelegramBotService:
 
         application = Application.builder().token(self.token).build()
         self.application = application
+        application.bot_data["pending_tasks"] = self.pending_tasks
+        application.bot_data["chat_id_to_user_id"] = self.chat_id_to_user_id
         self.setup_handlers(application)
 
         loop = asyncio.get_event_loop()

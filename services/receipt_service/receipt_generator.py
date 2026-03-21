@@ -9,7 +9,39 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+FONT_REGISTRATION_ATTEMPTED = False
+USE_DEJAVU_FONTS = False
+
+
+def _register_fonts():
+    global FONT_REGISTRATION_ATTEMPTED, USE_DEJAVU_FONTS
+    if FONT_REGISTRATION_ATTEMPTED:
+        return
+    FONT_REGISTRATION_ATTEMPTED = True
+
+    font_paths = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    ]
+
+    for path in font_paths:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("Helvetica", path))
+                pdfmetrics.registerFont(TTFont("Helvetica-Bold", path.replace("Sans", "Sans-Bold")))
+                USE_DEJAVU_FONTS = True
+                logger.info(f"Registered DejaVu fonts from {path}")
+                break
+            except Exception as e:
+                logger.warning(f"Failed to register DejaVu fonts: {e}")
+
+    if not USE_DEJAVU_FONTS:
+        logger.warning("DejaVu fonts not found, using Helvetica (Cyrillic may not display)")
+
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +50,12 @@ class ReceiptGenerator:
     def __init__(self, output_dir: str = "/app/downloads/receipts"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        _register_fonts()
+
+    def _font(self, bold=False):
+        if USE_DEJAVU_FONTS:
+            return "Helvetica-Bold" if bold else "Helvetica"
+        return "Helvetica-Bold" if bold else "Helvetica"
 
     def generate_receipt_pdf(
         self,
@@ -75,8 +113,8 @@ class ReceiptGenerator:
                     str(idx),
                     name,
                     str(quantity),
-                    f"{price:.2f} ₽",
-                    f"{item_total:.2f} ₽",
+                    f"{price:.2f} BYN",
+                    f"{item_total:.2f} BYN",
                 ]
             )
 
@@ -113,7 +151,7 @@ class ReceiptGenerator:
             alignment=2,
             fontName="Helvetica-Bold",
         )
-        elements.append(Paragraph(f"ИТОГО: {total:.2f} ₽", total_style))
+        elements.append(Paragraph(f"ИТОГО: {total:.2f} BYN", total_style))
 
         doc.build(elements)
         logger.info(f"Receipt generated: {output_path}")
@@ -179,8 +217,8 @@ class ReceiptGenerator:
                     str(idx),
                     name,
                     str(quantity),
-                    f"{price:.2f} ₽",
-                    f"{item_total:.2f} ₽",
+                    f"{price:.2f} BYN",
+                    f"{item_total:.2f} BYN",
                 ]
             )
             idx += 1
@@ -200,8 +238,8 @@ class ReceiptGenerator:
                     str(idx),
                     name,
                     str(quantity),
-                    f"{price:.2f} ₽" if price > 0 else "-",
-                    f"{item_total:.2f} ₽" if price > 0 else "-",
+                    f"{price:.2f} BYN" if price > 0 else "-",
+                    f"{item_total:.2f} BYN" if price > 0 else "-",
                 ]
             )
             idx += 1
@@ -241,7 +279,7 @@ class ReceiptGenerator:
             alignment=2,
             fontName="Helvetica-Bold",
         )
-        elements.append(Paragraph(f"ИТОГО: {total:.2f} ₽", total_style))
+        elements.append(Paragraph(f"ИТОГО: {total:.2f} BYN", total_style))
 
         doc.build(elements)
         logger.info(f"Receipt with unknown items generated: {output_path}")

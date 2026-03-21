@@ -94,6 +94,27 @@ class ResultMessage:
     error: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
 
+    @classmethod
+    def success(
+        cls, task_id: str, result_type: str, result_data: dict[str, Any]
+    ) -> "ResultMessage":
+        return cls(
+            task_id=task_id,
+            status=TaskStatus.SUCCESS,
+            result_type=result_type,
+            result_data=result_data,
+        )
+
+    @classmethod
+    def failure(cls, task_id: str, result_type: str, error: str) -> "ResultMessage":
+        return cls(
+            task_id=task_id,
+            status=TaskStatus.FAILED,
+            result_type=result_type,
+            result_data={},
+            error=error,
+        )
+
     def to_json(self) -> str:
         data = asdict(self)
         data["status"] = self.status.value

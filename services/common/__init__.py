@@ -1,3 +1,4 @@
+from .base_kafka_consumer import BaseKafkaConsumer
 from .base_service import BaseService, HealthCheckHandler, setup_logging
 from .database import check_db_health, get_db, init_db
 from .exceptions import (
@@ -32,6 +33,7 @@ from .schemas import (
     TaskStatus,
     TaskType,
 )
+from .utils import calculate_receipt_total, format_receipt_table
 
 __all__ = [
     "TaskMessage",
@@ -52,6 +54,7 @@ __all__ = [
     "check_db_health",
     "init_db",
     "BaseService",
+    "BaseKafkaConsumer",
     "setup_logging",
     "HealthCheckHandler",
     "get_available_models",
@@ -65,4 +68,6 @@ __all__ = [
     "track_error",
     "set_queue_size",
     "set_active_workers",
+    "format_receipt_table",
+    "calculate_receipt_total",
 ]

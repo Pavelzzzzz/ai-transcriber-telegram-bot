@@ -8,6 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -26,12 +27,16 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 
 COPY services/ services/
+
+# Install playwright and chromium
+RUN pip install playwright && playwright install chromium --with-deps
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

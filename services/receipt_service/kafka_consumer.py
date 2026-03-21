@@ -115,6 +115,17 @@ class ReceiptKafkaConsumer:
                 for item in unknown_items_data
             ]
 
+            if result.get("missing_items"):
+                for item in result["missing_items"]:
+                    unknown_items.append(
+                        {
+                            "article": item["article"],
+                            "name": item.get("name", f"Товар {item['article']}"),
+                            "quantity": item.get("quantity", 1),
+                            "price": 0.0,
+                        }
+                    )
+
             pdf_path = self.processor.generate_receipt_pdf_sync(result["items"], unknown_items)
 
             logger.info(f"Receipt generated: {pdf_path}")
