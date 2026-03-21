@@ -345,24 +345,27 @@ class TestHandleConfirmReceipt:
         return context
 
     def test_confirm_handles_json_items(self):
-        from services.bot_service.receipt_handlers import handle_confirm_receipt
         import inspect
+
+        from services.bot_service.receipt_handlers import handle_confirm_receipt
 
         source = inspect.getsource(handle_confirm_receipt)
         assert "json.dumps" in source
         assert "items_text" in source
 
     def test_confirm_stores_pending_tasks(self):
-        from services.bot_service.receipt_handlers import handle_confirm_receipt
         import inspect
+
+        from services.bot_service.receipt_handlers import handle_confirm_receipt
 
         source = inspect.getsource(handle_confirm_receipt)
         assert "pending_tasks" in source
         assert "task_id" in source
 
     def test_confirm_sends_to_kafka(self):
-        from services.bot_service.receipt_handlers import handle_confirm_receipt
         import inspect
+
+        from services.bot_service.receipt_handlers import handle_confirm_receipt
 
         source = inspect.getsource(handle_confirm_receipt)
         assert "kafka_config" in source

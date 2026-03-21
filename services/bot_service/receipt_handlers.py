@@ -240,7 +240,7 @@ async def show_receipt_preview(update: Update, context: ContextTypes.DEFAULT_TYP
         keyboard.append(
             [
                 InlineKeyboardButton(f"✏️ {idx}", callback_data=f"receipt:edititem:{idx}"),
-                InlineKeyboardButton(f"❌", callback_data=f"receipt:remove:{idx}"),
+                InlineKeyboardButton("❌", callback_data=f"receipt:remove:{idx}"),
             ]
         )
 
@@ -680,7 +680,7 @@ async def show_receipt_preview_from_message(update: Update, context: ContextType
         keyboard.append(
             [
                 InlineKeyboardButton(f"✏️ {idx}", callback_data=f"receipt:edititem:{idx}"),
-                InlineKeyboardButton(f"❌", callback_data=f"receipt:remove:{idx}"),
+                InlineKeyboardButton("❌", callback_data=f"receipt:remove:{idx}"),
             ]
         )
 
