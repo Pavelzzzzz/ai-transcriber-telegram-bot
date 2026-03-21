@@ -173,6 +173,8 @@ services:
       args:
         GPU_TYPE: ${GPU_TYPE}
     container_name: image-gen-service
+    ports:
+      - "8005:8005"
     environment:
       - SDXL_MODEL_ID=${SDXL_MODEL_ID:-stabilityai/stable-diffusion-xl-base-1.0}
       - SD15_MODEL_ID=${SD15_MODEL_ID:-runwayml/stable-diffusion-v1-5}

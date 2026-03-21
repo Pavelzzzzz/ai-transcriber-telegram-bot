@@ -1,6 +1,8 @@
 import logging
 import os
 import signal
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from services.common import KafkaProducerError, ResultMessage, kafka_config
 from services.common.base_service import BaseService
@@ -10,6 +12,23 @@ from .kafka_consumer import TranscriptionKafkaConsumer
 logger = logging.getLogger(__name__)
 
 
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"status": "ok", "service": "transcription_service"}')
+
+    def log_message(self, format, *args):
+        pass
+
+
+def start_health_server(port=8003):
+    server = HTTPServer(("", port), HealthHandler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+
 class TranscriptionService(BaseService):
     def __init__(self):
         super().__init__("transcription_service")
@@ -17,6 +36,8 @@ class TranscriptionService(BaseService):
         self.consumer = None
         self._result_producer = None
         self._initialized = False
+
+        start_health_server()
 
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)

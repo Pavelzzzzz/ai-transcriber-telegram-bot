@@ -3,6 +3,8 @@ import logging
 import os
 import sys
 
+import httpx
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from telegram import BotCommand, Update
@@ -278,22 +280,82 @@ class TelegramBotService:
         await self.safe_processor.safe_reply(update, message)
 
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        import asyncio
         from datetime import datetime
+
+        kafka_status = "✅ Подключен" if self.producer else "❌ Отключен"
+        db_healthy = False
+        try:
+            from services.common.database import check_db_health
+
+            db_healthy = check_db_health()
+        except Exception:
+            pass
+        db_status = "✅ Подключена" if db_healthy else "❌ Недоступна"
+
+        service_statuses = await self._check_services_health()
+
+        pending_count = len(self.pending_tasks)
+        queue_status = f"📋 Задач в очереди: {pending_count}"
+
+        services_text = "\n".join(
+            f"🔹 **{name}** - {status}" for name, status in service_statuses.items()
+        )
 
         message = f"""
 🤖 **Статус AI Транскрибатора:**
 ✅ Бот активен и готов к работе
 
-🔹 **Компоненты:**
-🔸 Kafka - Подключен
-🔸 OCR система - Готова
-🔸 Whisper AI - Готов
+🔹 **Kafka:** {kafka_status}
+🔹 **PostgreSQL:** {db_status}
+
+{services_text}
+
+🔹 **{queue_status}**
 
 ⏰ **Время:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 🎯 **Текущий режим:** {self.user_modes.get(update.effective_user.id if update.effective_user else 0, "img_to_text")}
         """.strip()
         await self.safe_processor.safe_reply(update, message)
+
+    async def _check_services_health(self) -> dict:
+        import asyncio
+
+        import httpx
+
+        services = {
+            "OCR (RapidOCR)": "http://ocr-service:8002/health",
+            "Whisper (транскрипция)": "http://transcription-service:8003/health",
+            "TTS (озвучка)": "http://tts-service:8004/health",
+            "Image Gen (Stable Diffusion)": "http://image-gen-service:8005/health",
+        }
+
+        results = {}
+        timeout = 3.0
+
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            tasks = [
+                self._check_single_service(client, name, url) for name, url in services.items()
+            ]
+            service_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for (name, _), result in zip(services.items(), service_results, strict=True):
+            if isinstance(result, Exception):
+                results[name] = "❌ Недоступен"
+            else:
+                results[name] = "✅ Готов" if result else "❌ Недоступен"
+
+        results["Receipt (чеки WB)"] = "✅ Готов"
+
+        return results
+
+    async def _check_single_service(self, client: httpx.AsyncClient, name: str, url: str) -> bool:
+        try:
+            response = await client.get(url)
+            return response.status_code == 200
+        except Exception:
+            return False
 
     async def queue_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id if update.effective_chat else 0
@@ -320,6 +382,8 @@ class TelegramBotService:
                 "ocr": "📸 OCR",
                 "transcribe": "🎤 Транскрипция",
                 "image_gen": "🖼️ Изображение",
+                "receipt": "🧾 Чек WB",
+                "tts": "🔊 TTS",
             }
             task_type_display = type_names.get(task_type, task_type)
             task_lines.append(f"{i}. `{task_id[:8]}...` - {task_type_display}")

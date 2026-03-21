@@ -315,6 +315,18 @@ class TestParseItemsInput:
 
         assert result is None
 
+    def test_get_wb_product_name_from_url_returns_none_on_failure(self):
+        from services.bot_service.receipt_handlers import get_wb_product_name_from_url
+
+        result = get_wb_product_name_from_url("https://invalid-domain-that-does-not-exist.xyz/123")
+        assert result is None
+
+    def test_get_wb_product_name_from_article_returns_none_on_invalid_article(self):
+        from services.bot_service.receipt_handlers import get_wb_product_name_from_article
+
+        result = get_wb_product_name_from_article("999999999999")
+        assert result is None
+
 
 class TestHandleConfirmReceipt:
     @pytest.fixture
