@@ -21,7 +21,14 @@ RUN pip install --upgrade pip
 
 COPY services/image_gen_service/requirements.txt /app/requirements.txt
 
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+RUN pip install --upgrade pip && \
+    if [ "$GPU_TYPE" = "amd" ]; then \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/rocm6.0; \
+    elif [ "$GPU_TYPE" = "nvidia" ]; then \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu121; \
+    else \
+        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
+    fi && \
     pip install --no-cache-dir -r /app/requirements.txt
 
 # ============================================

@@ -143,9 +143,15 @@ class ImageGenerationService(BaseService):
             producer = self._get_result_producer()
             topic = kafka_config.topics["results_image_gen"]
 
+            logger.info(
+                f"Sending result for task {result.task_id}: status={result.status}, type={result.result_type}, data_keys={list(result.result_data.keys()) if result.result_data else None}"
+            )
+
             future = producer.send(topic, key=str(result.task_id), value=result.to_json())
-            future.get(timeout=10)
-            logger.info(f"Image generation result sent for task {result.task_id}")
+            record_metadata = future.get(timeout=10)
+            logger.info(
+                f"Image generation result SENT to {record_metadata.topic}:{record_metadata.partition} for task {result.task_id}"
+            )
         except Exception as e:
             logger.error(f"Failed to send result: {e}")
 

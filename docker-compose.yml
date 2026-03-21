@@ -183,7 +183,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
       - KAFKA_CLIENT_ID=image-gen-service
       - DATABASE_URL=postgresql://${DB_USER:-bot}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-ai_transcriber}
-      - GPU_TYPE=${GPU_TYPE:-intel}
+      - GPU_TYPE=${GPU_TYPE:-cpu}
     depends_on:
       kafka:
         condition: service_healthy

@@ -105,7 +105,9 @@ class TelegramBotService:
         return self._async_loop
 
     def handle_result(self, result: ResultMessage):
-        logger.info(f"Handling result for task {result.task_id}: {result.status}")
+        logger.info(
+            f"handle_result called for task {result.task_id}: status={result.status}, type={result.result_type}"
+        )
 
         task_info = self.pending_tasks.get(result.task_id)
         if not task_info:
@@ -116,6 +118,7 @@ class TelegramBotService:
 
         chat_id = task_info.get("chat_id")
         task_type = task_info.get("task_type")
+        logger.info(f"Task {result.task_id}: chat_id={chat_id}, task_type={task_type}")
 
         if not chat_id:
             logger.warning(f"No chat_id for task {result.task_id}")

@@ -40,6 +40,8 @@ class TaskProducer:
             producer = self._get_producer()
             topic = self._get_topic_for_task_type(task.task_type)
 
+            logger.info(f"Sending task {task.task_id} to topic {topic}")
+
             future = producer.send(topic, key=str(task.task_id), value=task.to_json())
 
             record_metadata = future.get(timeout=10)

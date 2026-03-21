@@ -39,8 +39,12 @@ class ResultConsumer:
     def _process_message(self, message):
         try:
             result = ResultMessage.from_json(message.value)
-            logger.info(f"Received result for task {result.task_id}: {result.status}")
+            logger.info(
+                f"Received result for task {result.task_id}: status={result.status}, type={result.result_type}, topic={message.topic}"
+            )
+            logger.info(f"Calling result_callback for task {result.task_id}...")
             self.result_callback(result)
+            logger.info(f"result_callback completed for task {result.task_id}")
         except Exception as e:
             logger.error(f"Failed to process message: {e}")
 
@@ -49,6 +53,10 @@ class ResultConsumer:
         while self._running:
             try:
                 messages = consumer.poll(timeout_ms=1000)
+                if messages:
+                    logger.info(
+                        f"Polled {sum(len(records) for records in messages.values())} messages from {len(messages)} topics"
+                    )
                 for topic_partition, records in messages.items():
                     for record in records:
                         self._process_message(record)
@@ -64,6 +72,7 @@ class ResultConsumer:
             return
 
         self._running = True
+        logger.info("Starting result consumer thread")
         self._thread = Thread(target=self._consume_loop, daemon=True)
         self._thread.start()
         logger.info("Result consumer started")
@@ -117,15 +126,26 @@ class NotificationConsumer:
             logger.error(f"Failed to process notification: {e}")
 
     def _consume_loop(self):
+        logger.info("Starting result consumer _consume_loop")
         consumer = self._get_consumer()
+        poll_count = 0
         while self._running:
             try:
                 messages = consumer.poll(timeout_ms=1000)
+                poll_count += 1
+                if poll_count % 10 == 0:
+                    logger.info(
+                        f"Poll #{poll_count}: got {sum(len(records) for records in messages.values())} messages from {list(messages.keys())}"
+                    )
+                if messages:
+                    logger.info(
+                        f"Polled {sum(len(records) for records in messages.values())} messages from {len(messages)} topics: {list(messages.keys())}"
+                    )
                 for topic_partition, records in messages.items():
                     for record in records:
                         self._process_message(record)
             except Exception as e:
-                logger.error(f"Error in notification consumer loop: {e}")
+                logger.error(f"Error in consumer loop: {e}")
                 if self._running:
                     import time
 
