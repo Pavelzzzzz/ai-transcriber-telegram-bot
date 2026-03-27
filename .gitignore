@@ -161,3 +161,4 @@ docker-compose.override.yml
 secrets/
 *.key
 *.pem
+template_res.jpg

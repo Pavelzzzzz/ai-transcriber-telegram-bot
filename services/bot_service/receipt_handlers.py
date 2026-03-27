@@ -7,9 +7,11 @@ from telegram.ext import ContextTypes
 from services.common.user_settings_repo import (
     create_receipt_history,
     delete_receipt_history,
+    get_or_create_user_settings,
     get_receipt_by_id,
     get_user_receipt_history,
     update_receipt_history,
+    update_user_settings,
 )
 
 logger = logging.getLogger(__name__)
@@ -336,6 +338,10 @@ async def receipt_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_confirm_receipt(update, context, pending_tasks, chat_id_to_user_id)
     elif action == "cancel":
         await handle_cancel_receipt(update, context)
+    elif action == "company":
+        await handle_set_company(update, context)
+    elif action == "generate_pdf":
+        await handle_generate_pdf(update, context)
 
 
 async def handle_create_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -469,6 +475,7 @@ async def show_receipt_preview(update: Update, context: ContextTypes.DEFAULT_TYP
     text += "└────────────────────────────────────────────────────────┘"
 
     keyboard.append([InlineKeyboardButton("➕ Добавить товар", callback_data="receipt:add_item")])
+    keyboard.append([InlineKeyboardButton("🏢 Фирма", callback_data="receipt:company")])
     keyboard.append(
         [InlineKeyboardButton("✅ Подтвердить и создать", callback_data="receipt:confirm")]
     )
@@ -507,6 +514,9 @@ async def handle_edit_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_add_item_to_draft(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["receipt_adding_item"] = True
 
+    draft = context.user_data.get("receipt_draft", {})
+    receipt_id = draft.get("receipt_id")
+
     text = """➕ Добавление товара
 
 Введите товар в формате:
@@ -514,8 +524,9 @@ async def handle_add_item_to_draft(update: Update, context: ContextTypes.DEFAULT
 
 Пример: 178601980 x 2 x 150.50"""
 
+    back_callback = f"receipt:view:{receipt_id}" if receipt_id else "receipt:preview"
     keyboard = [
-        [InlineKeyboardButton("🔙 Назад к предпросмотру", callback_data="receipt:preview")],
+        [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)],
         [InlineKeyboardButton("❌ Отмена", callback_data="receipt:cancel")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -530,12 +541,24 @@ async def handle_remove_item_from_draft(
 ):
     draft = context.user_data.get("receipt_draft", {})
     items = draft.get("items", [])
+    receipt_id = draft.get("receipt_id")
+    user_id = update.effective_user.id
 
     if 0 < idx <= len(items):
         removed = items.pop(idx - 1)
         context.user_data["receipt_draft"]["items"] = items
+
+        total = sum(item.get("price", 0) * item.get("quantity", 1) for item in items)
+
+        if receipt_id:
+            update_receipt_history(receipt_id, user_id, items=items, total=total)
+
         await update.callback_query.answer(f"✅ Удален: {removed.get('name', 'Товар')[:30]}")
-        await show_receipt_preview(update, context)
+
+        if receipt_id:
+            await handle_view_receipt(update, context, receipt_id)
+        else:
+            await show_receipt_preview(update, context)
     else:
         await update.callback_query.answer("❌ Товар не найден", show_alert=True)
 
@@ -545,6 +568,7 @@ async def handle_edit_item_name(update: Update, context: ContextTypes.DEFAULT_TY
 
     draft = context.user_data.get("receipt_draft", {})
     items = draft.get("items", [])
+    receipt_id = draft.get("receipt_id")
 
     if 0 < idx <= len(items):
         item = items[idx - 1]
@@ -559,8 +583,9 @@ async def handle_edit_item_name(update: Update, context: ContextTypes.DEFAULT_TY
 
 Введите новое название товара:"""
 
+        back_callback = f"receipt:view:{receipt_id}" if receipt_id else "receipt:preview"
         keyboard = [
-            [InlineKeyboardButton("🔙 Отмена", callback_data="receipt:preview")],
+            [InlineKeyboardButton("🔙 Отмена", callback_data=back_callback)],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -585,6 +610,8 @@ async def handle_confirm_receipt(
 
     draft = context.user_data.get("receipt_draft", {})
     items = draft.get("items", [])
+    company = draft.get("company")
+    logger.info(f"handle_confirm_receipt: company from draft='{company}'")
 
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -629,7 +656,11 @@ async def handle_confirm_receipt(
         user_id=user_id,
         chat_id=chat_id,
         items_text=items_json,
-        metadata={"receipt_id": receipt.id if receipt else None, "is_json": True},
+        metadata={
+            "receipt_id": receipt.id if receipt else None,
+            "is_json": True,
+            "company": company,
+        },
     )
     producer.send_task(task)
 
@@ -662,6 +693,123 @@ async def handle_cancel_receipt(update: Update, context: ContextTypes.DEFAULT_TY
     await show_receipt_menu(update, context)
 
 
+async def handle_set_company(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    draft = context.user_data.get("receipt_draft", {})
+    receipt_id = draft.get("receipt_id")
+
+    user_id = update.effective_user.id
+    settings = get_or_create_user_settings(user_id)
+    current_company = draft.get("company") or settings.company if settings else ""
+
+    text = f"""🏢 **Название фирмы**
+
+Текущее: `{current_company or "Не задано"}`
+
+Введите название фирмы для товарного чека.
+Отправьте /skip чтобы удалить название."""
+
+    back_callback = f"receipt:view:{receipt_id}" if receipt_id else "receipt:preview"
+    keyboard = [
+        [InlineKeyboardButton("🔙 Назад", callback_data=back_callback)],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    context.user_data["receipt_setting_company"] = True
+
+    await update.callback_query.edit_message_text(
+        text=text, reply_markup=reply_markup, parse_mode="Markdown"
+    )
+
+
+async def handle_company_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not context.user_data.get("receipt_setting_company"):
+        return False
+
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    if text.lower() == "/skip":
+        company = None
+    else:
+        company = text
+
+    try:
+        update_user_settings(user_id, company=company)
+    except Exception as e:
+        logger.warning(f"Failed to save company to user_settings: {e}")
+
+    draft = context.user_data.get("receipt_draft", {})
+    receipt_id = draft.get("receipt_id")
+    draft["company"] = company
+    context.user_data["receipt_draft"] = draft
+    logger.info(f"handle_company_input: company='{company}' saved to draft")
+
+    context.user_data.pop("receipt_setting_company", None)
+
+    await update.message.reply_text(
+        f"✅ Фирма сохранена: `{company or 'Не задана'}`", parse_mode="Markdown"
+    )
+
+    if receipt_id:
+        await handle_view_receipt(update, context, receipt_id)
+    else:
+        await show_receipt_preview_from_message(update, context)
+    return True
+
+
+async def handle_generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    import json
+
+    from services.common.kafka_config import kafka_config
+
+    from .kafka_producer import TaskProducer
+
+    draft = context.user_data.get("receipt_draft", {})
+    items = draft.get("items", [])
+    receipt_id = draft.get("receipt_id")
+
+    if not items:
+        await update.callback_query.answer("⚠️ Нет товаров в чеке", show_alert=True)
+        return
+
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    keyboard = [
+        [InlineKeyboardButton("🔙 К чеку", callback_data=f"receipt:view:{receipt_id}")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.callback_query.edit_message_text(
+        text="🔄 Создаю PDF чек...",
+        reply_markup=reply_markup,
+    )
+
+    items_json = json.dumps(items, ensure_ascii=False)
+
+    settings = get_or_create_user_settings(user_id)
+    company = settings.company if settings else None
+
+    producer = TaskProducer(kafka_config)
+    task = producer.create_receipt_task(
+        user_id=user_id,
+        chat_id=chat_id,
+        items_text=items_json,
+        metadata={"receipt_id": receipt_id, "is_json": True, "company": company},
+    )
+    producer.send_task(task)
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text="✅ PDF чек создан!\n\nВы получите файл в ближайшее время.",
+        reply_markup=reply_markup,
+    )
+
+
 async def handle_view_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE, receipt_id: int):
     context.user_data.pop("receipt_creating", None)
     context.user_data.pop("receipt_items", None)
@@ -673,31 +821,70 @@ async def handle_view_receipt(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.callback_query.edit_message_text(text="❌ Чек не найден")
         return
 
-    date_str = receipt.created_at.strftime("%d.%m.%Y %H:%M") if receipt.created_at else "?"
+    settings = get_or_create_user_settings(user_id)
+    company = settings.company if settings else None
+
+    context.user_data["receipt_draft"] = {
+        "items": receipt.items or [],
+        "receipt_id": receipt_id,
+        "company": company,
+    }
+
     items = receipt.items or []
     total = float(receipt.total) if receipt.total else 0
 
-    text = f"📋 Чек #{receipt.id}\n📅 {date_str}\n\n"
-    text += "📦 Товары:\n"
+    text = "👁️ <b>Предпросмотр чека</b>\n\n"
+    if company:
+        text += f"🏢 Фирма: {company}\n\n"
 
-    for idx, item in enumerate(items[:10], start=1):
-        name = item.get("name", "Неизвестно")[:40]
+    text += "┌────────────────────────────────────────────────────────┐\n"
+    text += "│  № │ Артикул     │ Наименование            │ Кол │ Цена      │ Сумма    │\n"
+    text += "├────┼─────────────┼────────────────────────┼─────┼───────────┼──────────┤\n"
+
+    keyboard = []
+    for idx, item in enumerate(items, start=1):
+        article = item.get("article", "-")
+        name = item.get("name", f"Артикул {article}")[:22]
         quantity = item.get("quantity", 1)
         price = item.get("price", 0)
-        text += f"{idx}. {name}\n   x{quantity} × {price:.2f} BYN\n"
+        item_sum = price * quantity
 
-    if len(items) > 10:
-        text += f"\n... и ещё {len(items) - 10} товаров"
+        price_str = f"{price:.2f}" if price > 0 else "-"
+        sum_str = f"{item_sum:.2f}" if price > 0 else "-"
 
-    text += f"\n\n💰 ИТОГО: {total:.2f} BYN"
+        text += f"│ {idx:2}. │ {article[:11]:11} │ {name:<22} │ {quantity:<4} │ {price_str:<9} │ {sum_str:<8} │\n"
 
-    keyboard = [
-        [InlineKeyboardButton("🗑️ Удалить", callback_data=f"receipt:delete:{receipt_id}")],
-        [InlineKeyboardButton("🔙 К списку", callback_data="receipt:list")],
-    ]
+        keyboard.append(
+            [
+                InlineKeyboardButton(f"✏️ {idx}", callback_data=f"receipt:edititem:{idx}"),
+                InlineKeyboardButton("❌", callback_data=f"receipt:remove:{idx}"),
+            ]
+        )
+
+    if not items:
+        text += "│ (нет товаров)                                          │\n"
+
+    total_str = f"{total:.2f}"
+    text += "├────┴─────────────┴────────────────────────┴─────┴───────────┴──────────┤\n"
+    text += f"│ ИТОГО:                                              │ {total_str:<8} │\n"
+    text += "└────────────────────────────────────────────────────────┘"
+
+    keyboard.append([InlineKeyboardButton("➕ Добавить товар", callback_data="receipt:add_item")])
+    keyboard.append([InlineKeyboardButton("🏢 Фирма", callback_data="receipt:company")])
+    keyboard.append([InlineKeyboardButton("📄 Создать PDF", callback_data="receipt:generate_pdf")])
+    keyboard.append([InlineKeyboardButton("🔙 К списку чеков", callback_data="receipt:list")])
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+    await update.callback_query.edit_message_text(
+        text=text, reply_markup=reply_markup, parse_mode="HTML"
+    )
+
+    keyboard.append([InlineKeyboardButton("🔙 К списку чеков", callback_data="receipt:list")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.callback_query.edit_message_text(
+        text=text, reply_markup=reply_markup, parse_mode="HTML"
+    )
 
 
 async def handle_delete_receipt(
@@ -783,6 +970,10 @@ async def process_receipt_items(
         else:
             await update.message.reply_text("❌ Товар не найден")
             return
+
+    if context.user_data.get("receipt_setting_company"):
+        await handle_company_input(update, context)
+        return
 
     if context.user_data.get("receipt_adding_item"):
         parsed = parse_items_input(items_text)
@@ -948,6 +1139,7 @@ async def show_receipt_preview_from_message(update: Update, context: ContextType
     text += "└────────────────────────────────────────────────────────┘"
 
     keyboard.append([InlineKeyboardButton("➕ Добавить товар", callback_data="receipt:add_item")])
+    keyboard.append([InlineKeyboardButton("🏢 Фирма", callback_data="receipt:company")])
     keyboard.append(
         [InlineKeyboardButton("✅ Подтвердить и создать", callback_data="receipt:confirm")]
     )

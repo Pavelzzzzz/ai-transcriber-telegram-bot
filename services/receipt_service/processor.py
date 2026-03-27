@@ -44,14 +44,23 @@ class ReceiptProcessor:
         self,
         items: list[dict[str, Any]],
         unknown_items: list[dict[str, Any]] | None = None,
+        user_id: int | None = None,
+        company: str | None = None,
     ) -> str:
+        final_company = company
+        logger.info(f"Generating receipt with company from metadata: '{final_company}'")
+
         if unknown_items:
-            return self.generator.generate_receipt_with_unknown(items, unknown_items)
-        return self.generator.generate_receipt_pdf(items)
+            return self.generator.generate_receipt_with_unknown(
+                items, unknown_items, company=final_company
+            )
+        return self.generator.generate_receipt_pdf(items, company=final_company)
 
     async def generate_receipt_pdf(
         self,
         items: list[dict[str, Any]],
         unknown_items: list[dict[str, Any]] | None = None,
+        user_id: int | None = None,
+        company: str | None = None,
     ) -> str:
-        return self.generate_receipt_pdf_sync(items, unknown_items)
+        return self.generate_receipt_pdf_sync(items, unknown_items, user_id, company)

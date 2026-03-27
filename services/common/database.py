@@ -1,7 +1,9 @@
+import glob
 import logging
 import os
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
@@ -61,3 +63,76 @@ def check_db_health() -> bool:
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         return False
+
+
+def init_schema_migrations_table() -> None:
+    """Create schema_migrations table if it doesn't exist."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    version VARCHAR(10) PRIMARY KEY,
+                    description TEXT,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Could not create schema_migrations table: {e}")
+
+
+def get_applied_migrations() -> set:
+    """Get set of already applied migration versions."""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT version FROM schema_migrations"))
+            return {row[0] for row in result}
+    except Exception:
+        return set()
+
+
+def run_migrations() -> None:
+    """Run all pending migrations automatically."""
+    init_schema_migrations_table()
+    applied = get_applied_migrations()
+
+    migrations_dir = Path(__file__).parent.parent.parent / "db" / "migrations"
+    migration_files = sorted(migrations_dir.glob("*.sql"))
+
+    for migration_file in migration_files:
+        version = migration_file.stem.split("_")[0]
+        if version in applied:
+            continue
+
+        try:
+            logger.info(f"Applying migration: {migration_file.name}")
+            with open(migration_file, "r") as f:
+                sql = f.read()
+
+            with engine.connect() as conn:
+                conn.execute(text(sql))
+                conn.commit()
+
+            logger.info(f"Migration {version} applied successfully")
+        except Exception as e:
+            logger.error(f"Failed to apply migration {migration_file.name}: {e}")
+
+
+try:
+    run_migrations()
+except Exception as e:
+    logger.warning(f"Auto migration check failed (this is normal on first run): {e}")
+
+try:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(
+            text("ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS company VARCHAR(100)")
+        )
+        conn.commit()
+        logger.info("Ensured company column exists")
+except Exception as e:
+    logger.warning(f"Could not ensure company column: {e}")

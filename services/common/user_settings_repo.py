@@ -21,6 +21,7 @@ class UserSettings(Base):
     num_variations = Column(Integer, default=1)
     negative_prompt = Column(Text, nullable=True)
     noise_reduction = Column(Boolean, default=True)
+    company = Column(String(100), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -33,6 +34,7 @@ class UserSettings(Base):
             "num_variations": self.num_variations,
             "negative_prompt": self.negative_prompt,
             "noise_reduction": self.noise_reduction,
+            "company": self.company,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -101,14 +103,43 @@ def get_or_create_user_settings(user_id: int) -> UserSettings:
         with get_db() as db:
             settings = db.query(UserSettings).filter(UserSettings.user_id == user_id).first()
             if not settings:
-                settings = UserSettings(user_id=user_id)
+                settings = UserSettings(
+                    user_id=user_id,
+                    image_model="sdxl",
+                    image_style=None,
+                    aspect_ratio="1:1",
+                    num_variations=1,
+                    negative_prompt=None,
+                    noise_reduction=True,
+                    company=None,
+                )
                 db.add(settings)
+                db.commit()
+                db.refresh(settings)
+            else:
+                if not settings.image_model:
+                    settings.image_model = "sdxl"
+                if not settings.aspect_ratio:
+                    settings.aspect_ratio = "1:1"
+                if not settings.num_variations:
+                    settings.num_variations = 1
+                if settings.noise_reduction is None:
+                    settings.noise_reduction = True
                 db.commit()
                 db.refresh(settings)
             return settings
     except Exception as e:
         logger.error(f"Error getting/creating user settings: {e}")
-        return UserSettings(user_id=user_id)
+        return UserSettings(
+            user_id=user_id,
+            image_model="sdxl",
+            image_style=None,
+            aspect_ratio="1:1",
+            num_variations=1,
+            negative_prompt=None,
+            noise_reduction=True,
+            company=None,
+        )
 
 
 def update_user_settings(user_id: int, **kwargs) -> UserSettings | None:
@@ -119,8 +150,12 @@ def update_user_settings(user_id: int, **kwargs) -> UserSettings | None:
         "num_variations",
         "negative_prompt",
         "noise_reduction",
+        "company",
     ]
     update_data = {k: v for k, v in kwargs.items() if k in valid_fields}
+    logger.info(
+        f"update_user_settings: user_id={user_id}, kwargs={kwargs}, update_data={update_data}"
+    )
 
     if not update_data:
         return get_user_settings(user_id)
@@ -131,9 +166,11 @@ def update_user_settings(user_id: int, **kwargs) -> UserSettings | None:
             if not settings:
                 settings = UserSettings(user_id=user_id, **update_data)
                 db.add(settings)
+                logger.info(f"Creating new UserSettings for user {user_id}")
             else:
                 for key, value in update_data.items():
                     setattr(settings, key, value)
+                    logger.info(f"Setting {key} = {value} for user {user_id}")
             db.commit()
             db.refresh(settings)
             return settings
@@ -153,6 +190,7 @@ def reset_user_settings(user_id: int) -> bool:
                 settings.num_variations = 1
                 settings.negative_prompt = None
                 settings.noise_reduction = True
+                settings.company = None
                 db.commit()
             return True
     except Exception as e:

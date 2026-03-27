@@ -61,6 +61,7 @@ class ReceiptGenerator:
         self,
         items: list[dict[str, Any]],
         output_path: str | None = None,
+        company: str | None = None,
     ) -> str:
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -80,6 +81,21 @@ class ReceiptGenerator:
 
         elements = []
         styles = getSampleStyleSheet()
+
+        company_value = company.strip() if company and company.strip() else None
+        logger.info(
+            f"generate_receipt_pdf: company='{company}', type={type(company)}, stripped='{company_value}'"
+        )
+
+        if company_value:
+            company_style = ParagraphStyle(
+                "Company",
+                parent=styles["Normal"],
+                fontSize=11,
+                alignment=0,
+            )
+            elements.append(Paragraph(f"Фирма: {company_value}", company_style))
+            elements.append(Spacer(1, 3 * mm))
 
         title_style = ParagraphStyle(
             "Title",
@@ -148,10 +164,20 @@ class ReceiptGenerator:
             "Total",
             parent=styles["Normal"],
             fontSize=14,
-            alignment=2,
+            alignment=0,
             fontName="Helvetica-Bold",
         )
-        elements.append(Paragraph(f"ИТОГО: {total:.2f} BYN", total_style))
+        elements.append(Paragraph(f"Всего: {total:.2f} BYN", total_style))
+        elements.append(Spacer(1, 10 * mm))
+
+        signature_style = ParagraphStyle(
+            "Signature",
+            parent=styles["Normal"],
+            fontSize=11,
+            alignment=0,
+            fontName="Helvetica-Bold",
+        )
+        elements.append(Paragraph("Подпись продавца: ________________", signature_style))
 
         doc.build(elements)
         logger.info(f"Receipt generated: {output_path}")
@@ -163,6 +189,7 @@ class ReceiptGenerator:
         items: list[dict[str, Any]],
         unknown_items: list[dict[str, Any]],
         output_path: str | None = None,
+        company: str | None = None,
     ) -> str:
         if not output_path:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -182,6 +209,21 @@ class ReceiptGenerator:
 
         elements = []
         styles = getSampleStyleSheet()
+
+        company_value = company.strip() if company and company.strip() else None
+        logger.info(
+            f"generate_receipt_with_unknown: company='{company}', stripped='{company_value}'"
+        )
+
+        if company_value:
+            company_style = ParagraphStyle(
+                "Company",
+                parent=styles["Normal"],
+                fontSize=11,
+                alignment=0,
+            )
+            elements.append(Paragraph(f"Фирма: {company_value}", company_style))
+            elements.append(Spacer(1, 3 * mm))
 
         title_style = ParagraphStyle(
             "Title",
@@ -276,10 +318,20 @@ class ReceiptGenerator:
             "Total",
             parent=styles["Normal"],
             fontSize=14,
-            alignment=2,
+            alignment=0,
             fontName="Helvetica-Bold",
         )
-        elements.append(Paragraph(f"ИТОГО: {total:.2f} BYN", total_style))
+        elements.append(Paragraph(f"Всего: {total:.2f} BYN", total_style))
+        elements.append(Spacer(1, 10 * mm))
+
+        signature_style = ParagraphStyle(
+            "Signature",
+            parent=styles["Normal"],
+            fontSize=11,
+            alignment=0,
+            fontName="Helvetica-Bold",
+        )
+        elements.append(Paragraph("Подпись продавца: ________________", signature_style))
 
         doc.build(elements)
         logger.info(f"Receipt with unknown items generated: {output_path}")

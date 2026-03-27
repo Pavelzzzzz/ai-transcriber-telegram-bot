@@ -1,6 +1,6 @@
 DO $$
 BEGIN
-    CREATE TABLE receipt_history (
+    CREATE TABLE IF NOT EXISTS receipt_history (
         id SERIAL PRIMARY KEY,
         user_id BIGINT NOT NULL,
         items JSONB NOT NULL,
@@ -9,9 +9,10 @@ BEGIN
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     
-    CREATE INDEX idx_receipt_history_user_id ON receipt_history(user_id);
-    CREATE INDEX idx_receipt_history_created_at ON receipt_history(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_receipt_history_user_id ON receipt_history(user_id);
+    CREATE INDEX IF NOT EXISTS idx_receipt_history_created_at ON receipt_history(created_at DESC);
     
     INSERT INTO schema_migrations (version, description) 
-    VALUES ('003', 'Add receipt_history table');
+    VALUES ('003', 'Add receipt_history table')
+    ON CONFLICT (version) DO NOTHING;
 END $$;

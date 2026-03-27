@@ -26,6 +26,7 @@ from services.common.user_settings_repo import (
 logger = logging.getLogger(__name__)
 
 PENDING_NEGATIVE_PROMPT = {}
+PENDING_COMPANY = {}
 
 
 def get_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
@@ -36,12 +37,17 @@ def get_settings_keyboard(user_id: int) -> InlineKeyboardMarkup:
     current_aspect = settings.aspect_ratio or "1:1"
     current_variations = settings.num_variations or 1
     current_noise = settings.noise_reduction if settings else True
+    current_company = settings.company if settings else None
 
     model_name = get_model_display_name(current_model)
     style_name = get_style_display_name(current_style) if current_style else "Без стиля"
     aspect_name = ASPECT_RATIO_NAMES.get(current_aspect, current_aspect)
+    company_display = current_company if current_company else "Не задана"
 
     keyboard = [
+        [
+            InlineKeyboardButton(f"🏢 Фирма: {company_display}", callback_data="settings:company"),
+        ],
         [
             InlineKeyboardButton(f"🎨 Модель: {model_name}", callback_data="settings:model"),
             InlineKeyboardButton(f"🎭 Стиль: {style_name}", callback_data="settings:style"),
@@ -134,6 +140,7 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     data = query.data
+    logger.info(f"settings_callback called with data: {data}")
 
     if data == "settings:back":
         await query.edit_message_text("✅ Настройки сохранены")
@@ -170,6 +177,10 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "settings:noise":
         await handle_settings_noise_callback(query, user_id)
+        return
+
+    if data == "settings:company":
+        await ask_company(query, user_id)
         return
 
 
@@ -300,14 +311,52 @@ async def handle_negative_prompt_input(
     return True
 
 
+async def ask_company(query, user_id: int):
+    settings = get_or_create_user_settings(user_id)
+    current_company = settings.company if settings else ""
+
+    text = "**Название фирмы**\n\n"
+    text += f"Текущее: `{current_company or 'Не задана'}`\n\n"
+    text += "Введите название фирмы для товарного чека.\n"
+    text += "Отправьте /skip чтобы удалить название."
+
+    PENDING_COMPANY[user_id] = True
+
+    await query.edit_message_text(text, parse_mode="Markdown")
+
+
+async def handle_company_input(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int
+) -> bool:
+    if not PENDING_COMPANY.get(user_id):
+        return False
+
+    text = update.message.text
+    company = None if text.lower() == "/skip" else text
+
+    try:
+        update_user_settings(user_id, company=company)
+    except Exception as e:
+        logger.warning(f"DB not available: {e}")
+
+    PENDING_COMPANY.pop(user_id, None)
+
+    await update.message.reply_text(
+        f"✅ Фирма сохранена: `{company or 'Не задана'}`", parse_mode="Markdown"
+    )
+    return True
+
+
 async def handle_settings_model_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query or not query.data or not query.data.startswith("settings:model:"):
         return
 
+    logger.info(f"handle_settings_model_callback called with data: {query.data}")
     await query.answer()
     user_id = update.effective_user.id
     model = query.data.split(":")[-1]
+    logger.info(f"User {user_id} selecting model: {model}")
 
     available_models = get_available_models()
     model_info = MODELS_CONFIG.get(model, {})
@@ -315,6 +364,7 @@ async def handle_settings_model_callback(update: Update, context: ContextTypes.D
 
     try:
         update_user_settings(user_id, image_model=model)
+        logger.info(f"Model {model} saved for user {user_id}")
 
         if model in available_models:
             await query.edit_message_text(
@@ -416,3 +466,27 @@ async def handle_settings_noise_callback(update: Update, context: ContextTypes.D
     except Exception as e:
         logger.warning(f"DB not available: {e}")
         await query.edit_message_text("❌ Не удалось сохранить настройку. Попробуйте позже.")
+
+
+async def handle_settings_company_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query or not query.data or query.data != "settings:company":
+        return
+
+    await query.answer()
+    user_id = update.effective_user.id
+
+    try:
+        settings = get_or_create_user_settings(user_id)
+        current_company = settings.company if settings else ""
+    except Exception:
+        current_company = ""
+
+    text = "**Название фирмы**\n\n"
+    text += f"Текущее: `{current_company or 'Не задана'}`\n\n"
+    text += "Введите название фирмы для товарного чека.\n"
+    text += "Отправьте /skip чтобы удалить название."
+
+    PENDING_COMPANY[user_id] = True
+
+    await query.edit_message_text(text, parse_mode="Markdown")

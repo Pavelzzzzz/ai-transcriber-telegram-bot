@@ -150,7 +150,7 @@ class TestReceiptProcessorAsync:
         result = await processor.generate_receipt_pdf(items)
 
         assert result == "/tmp/receipt.pdf"
-        processor.generator.generate_receipt_pdf.assert_called_once_with(items)
+        processor.generator.generate_receipt_pdf.assert_called_once_with(items, company=None)
 
 
 class TestReceiptProcessorTotalCalculation:

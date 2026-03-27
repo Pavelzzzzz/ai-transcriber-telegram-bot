@@ -17,6 +17,7 @@ from telegram.ext import (
     filters,
 )
 
+from services.common import database
 from services.common.kafka_config import KafkaConfig
 from services.common.schemas import ResultMessage, TaskStatus
 from services.common.user_settings_repo import get_or_create_user_settings
@@ -24,6 +25,11 @@ from services.common.user_settings_repo import get_or_create_user_settings
 from . import receipt_handlers, settings_handlers
 from .kafka_consumer import NotificationConsumer, ResultConsumer
 from .kafka_producer import TaskProducer
+
+try:
+    database.run_migrations()
+except Exception as e:
+    logging.warning(f"Migration check failed: {e}")
 
 kafka_config = KafkaConfig.from_env()
 
@@ -158,18 +164,25 @@ class TelegramBotService:
                                 parse_mode="Markdown",
                             )
                         )
-                    elif task_type == "image_gen" and result.result_data.get("file_path"):
-                        file_path = result.result_data.get("file_path")
-                        logger.info(f"Sending image to chat {chat_id}, file_path: {file_path}")
-                        loop.run_until_complete(
-                            self.safe_processor.send_photo_to_chat(
-                                bot,
-                                chat_id,
-                                "✅ **Изображение сгенерировано!**",
-                                file_path,
-                                parse_mode="Markdown",
-                            )
-                        )
+                    elif task_type == "image_gen":
+                        file_paths = result.result_data.get("file_paths", [])
+                        if not file_paths and result.result_data.get("file_path"):
+                            file_paths = [result.result_data.get("file_path")]
+                        if file_paths:
+                            logger.info(f"Sending {len(file_paths)} images to chat {chat_id}")
+                            for idx, file_path in enumerate(file_paths):
+                                caption = None
+                                if idx == 0:
+                                    caption = "✅ **Изображения сгенерированы!**"
+                                loop.run_until_complete(
+                                    self.safe_processor.send_photo_to_chat(
+                                        bot,
+                                        chat_id,
+                                        caption,
+                                        file_path,
+                                        parse_mode="Markdown",
+                                    )
+                                )
                     elif result.result_data.get("text"):
                         text = result.result_data.get("text")
                         loop.run_until_complete(
@@ -573,6 +586,9 @@ class TelegramBotService:
         if await settings_handlers.handle_negative_prompt_input(update, context, user_id):
             return
 
+        if await settings_handlers.handle_company_input(update, context, user_id):
+            return
+
         current_mode = self.user_modes.get(user_id, "img_to_text")
 
         if current_mode == "text_to_audio":
@@ -672,7 +688,7 @@ class TelegramBotService:
         application.add_handler(
             CallbackQueryHandler(
                 settings_handlers.settings_callback,
-                pattern="^settings:(back|reset|model|style|aspect|variations|negative|noise)$",
+                pattern="^settings:(back|reset|model|style|aspect|variations|negative|noise|company)$",
             )
         )
         application.add_handler(
@@ -708,6 +724,12 @@ class TelegramBotService:
             CallbackQueryHandler(
                 settings_handlers.handle_settings_noise_callback,
                 pattern="^settings:noise$",
+            )
+        )
+        application.add_handler(
+            CallbackQueryHandler(
+                settings_handlers.handle_settings_company_callback,
+                pattern="^settings:company$",
             )
         )
 

@@ -67,7 +67,18 @@ class ReceiptKafkaConsumer(BaseKafkaConsumer):
                         }
                     )
 
-            pdf_path = self.processor.generate_receipt_pdf_sync(result["items"], unknown_items)
+            company_from_metadata = task.metadata.get("company") if task.metadata else None
+            if company_from_metadata and company_from_metadata.strip():
+                company_value = company_from_metadata
+            else:
+                company_value = None
+            logger.info(
+                f"kafka_consumer: company from metadata='{company_from_metadata}', user_id={task.user_id}, using='{company_value}'"
+            )
+
+            pdf_path = self.processor.generate_receipt_pdf_sync(
+                result["items"], unknown_items, user_id=task.user_id, company=company_value
+            )
 
             logger.info(f"Receipt generated: {pdf_path}")
 
