@@ -59,6 +59,6 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
-    CMD curl -f http://localhost:8080/ || exit 1
+    CMD curl -f http://localhost:8005/ || exit 1
 
 CMD ["python", "-m", "services.image_gen_service.main"]

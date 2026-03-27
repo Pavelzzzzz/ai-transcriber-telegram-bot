@@ -99,10 +99,15 @@ class TelegramBotService:
         logger.info("Bot Service initialized")
 
     def _get_async_loop(self) -> asyncio.AbstractEventLoop:
-        if self._async_loop is None or self._async_loop.is_closed():
-            self._async_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._async_loop)
-        return self._async_loop
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                return loop
+        except RuntimeError:
+            pass
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
 
     def handle_result(self, result: ResultMessage):
         logger.info(
@@ -125,9 +130,9 @@ class TelegramBotService:
             return
 
         if self.application:
-            loop = self._get_async_loop()
             try:
                 bot = self.application.bot
+                loop = self._get_async_loop()
                 if result.status == TaskStatus.SUCCESS:
                     if task_type == "receipt" and result.result_data.get("file_path"):
                         file_path = result.result_data.get("file_path")
@@ -200,9 +205,9 @@ class TelegramBotService:
             return
 
         if self.application:
-            loop = self._get_async_loop()
             try:
                 bot = self.application.bot
+                loop = self._get_async_loop()
                 loop.run_until_complete(
                     self.safe_processor.send_message_to_chat(bot, int(chat_id), message)
                 )
@@ -763,8 +768,6 @@ def main():
             bot.result_consumer.stop()
         if bot.notification_consumer:
             bot.notification_consumer.stop()
-        if bot._async_loop and not bot._async_loop.is_closed():
-            bot._async_loop.close()
         logger.info("Cleanup completed")
 
 

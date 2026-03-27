@@ -51,10 +51,15 @@ class OCRProcessor:
         if not result:
             return ""
 
+        if not isinstance(result, list):
+            return str(result) if result else ""
+
         parts = []
         for item in result:
             if isinstance(item, (list, tuple)) and len(item) > 1:
-                parts.append(item[1])
+                text = item[1]
+                if text:
+                    parts.append(str(text))
 
         return " ".join(parts)
 
@@ -73,7 +78,20 @@ class OCRProcessor:
 
             processed = self._preprocess_image(image)
 
-            result, elapse, _ = self.reader(processed)
+            ocr_result = self.reader(processed)
+            if isinstance(ocr_result, tuple) and len(ocr_result) == 2:
+                result, elapse_raw = ocr_result
+                elapse = float(elapse_raw) if isinstance(elapse_raw, (int, float)) else 0
+            elif isinstance(ocr_result, tuple) and len(ocr_result) == 3:
+                result, elapse_raw, _ = ocr_result
+                elapse = float(elapse_raw) if isinstance(elapse_raw, (int, float)) else 0
+            else:
+                result = ocr_result
+                elapse = 0
+
+            # Handle None elapse
+            if elapse is None:
+                elapse = 0
 
             extracted_text = self._postprocess_text(result)
 

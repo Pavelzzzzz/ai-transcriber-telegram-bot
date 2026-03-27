@@ -407,7 +407,8 @@ async def show_receipt_preview(update: Update, context: ContextTypes.DEFAULT_TYP
             result = product_results[article]
             if not result.get("error"):
                 item["name"] = result.get("name", f"Артикул {article}")
-                item["price"] = result.get("price", 0)
+                if item.get("price", 0) == 0:
+                    item["price"] = result.get("price", 0)
             else:
                 not_found_articles.append(article)
         else:
@@ -415,6 +416,10 @@ async def show_receipt_preview(update: Update, context: ContextTypes.DEFAULT_TYP
                 product_name = get_wb_product_name_async(article)
                 if product_name:
                     item["name"] = product_name
+                    if item.get("price", 0) == 0:
+                        product_info = get_wb_product_info_async(article)
+                        if product_info:
+                            item["price"] = product_info.get("price", 0)
                 else:
                     not_found_articles.append(article)
             else:
@@ -602,7 +607,8 @@ async def handle_confirm_receipt(
             if article in product_results and not product_results[article].get("error"):
                 result = product_results[article]
                 item["name"] = result.get("name", f"Артикул {article}")
-                item["price"] = result.get("price", 0)
+                if item.get("price", 0) == 0:
+                    item["price"] = result.get("price", 0)
 
     items_json = json.dumps(items, ensure_ascii=False)
 
@@ -880,7 +886,8 @@ async def show_receipt_preview_from_message(update: Update, context: ContextType
             result = product_results[article]
             if not result.get("error"):
                 item["name"] = result.get("name", f"Артикул {article}")
-                item["price"] = result.get("price", 0)
+                if item.get("price", 0) == 0:
+                    item["price"] = result.get("price", 0)
             else:
                 not_found_articles.append(article)
         else:
