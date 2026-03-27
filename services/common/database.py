@@ -108,7 +108,7 @@ def run_migrations() -> None:
 
         try:
             logger.info(f"Applying migration: {migration_file.name}")
-            with open(migration_file, "r") as f:
+            with open(migration_file) as f:
                 sql = f.read()
 
             with engine.connect() as conn:

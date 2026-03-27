@@ -760,9 +760,9 @@ async def handle_company_input(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def handle_generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
     import json
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
     from services.common.kafka_config import kafka_config
 
