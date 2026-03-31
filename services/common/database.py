@@ -136,3 +136,25 @@ try:
         logger.info("Ensured company column exists")
 except Exception as e:
     logger.warning(f"Could not ensure company column: {e}")
+
+# Fallback for chat_id column - ensures it exists even if migration fails
+try:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE task_queue ADD COLUMN IF NOT EXISTS chat_id BIGINT"))
+        conn.commit()
+        logger.info("Ensured chat_id column in task_queue")
+except Exception as e:
+    logger.warning(f"Could not ensure chat_id column: {e}")
+
+# Fallback for task_metadata column - ensures it exists (renamed from metadata)
+try:
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE task_queue ADD COLUMN IF NOT EXISTS task_metadata JSONB"))
+        conn.commit()
+        logger.info("Ensured task_metadata column in task_queue")
+except Exception as e:
+    logger.warning(f"Could not ensure task_metadata column: {e}")

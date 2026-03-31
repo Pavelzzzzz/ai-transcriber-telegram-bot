@@ -20,6 +20,13 @@ from telegram.ext import (
 from services.common import database
 from services.common.kafka_config import KafkaConfig
 from services.common.schemas import ResultMessage, TaskStatus
+from services.common.task_queue_repo import (
+    add_task as add_task_to_queue,
+)
+from services.common.task_queue_repo import (
+    delete_task,
+    get_pending_tasks,
+)
 from services.common.user_settings_repo import get_or_create_user_settings
 
 from . import receipt_handlers, settings_handlers
@@ -104,6 +111,19 @@ class TelegramBotService:
 
         logger.info("Bot Service initialized")
 
+    def _load_pending_tasks_from_db(self):
+        try:
+            tasks = get_pending_tasks(limit=100)
+            for task in tasks:
+                self.pending_tasks[task.task_id] = {
+                    "chat_id": task.chat_id,
+                    "task_type": task.task_type,
+                }
+                self.chat_id_to_user_id[str(task.chat_id)] = str(task.user_id)
+            logger.info(f"Loaded {len(tasks)} pending tasks from database")
+        except Exception as e:
+            logger.warning(f"Failed to load pending tasks from DB: {e}")
+
     def _get_async_loop(self) -> asyncio.AbstractEventLoop:
         try:
             loop = asyncio.get_event_loop()
@@ -125,6 +145,7 @@ class TelegramBotService:
             logger.warning(
                 f"No pending task found for {result.task_id}, result_data: {result.result_data}"
             )
+            delete_task(result.task_id)
             return
 
         chat_id = task_info.get("chat_id")
@@ -208,6 +229,7 @@ class TelegramBotService:
 
         if result.task_id in self.pending_tasks:
             del self.pending_tasks[result.task_id]
+        delete_task(result.task_id)
 
     def handle_notification(self, user_id: str, message: str):
         logger.info(f"Handling notification for user {user_id}: {message[:50]}...")
@@ -500,6 +522,13 @@ class TelegramBotService:
                     "task_type": "ocr",
                     "file_path": image_path,
                 }
+                add_task_to_queue(
+                    task_id=task.task_id,
+                    user_id=user_id,
+                    task_type="ocr",
+                    chat_id=chat_id,
+                    metadata={"file_path": image_path},
+                )
                 self.chat_id_to_user_id[str(chat_id)] = str(user_id)
                 await self.safe_processor.safe_reply(
                     update,
@@ -554,6 +583,13 @@ class TelegramBotService:
                     "task_type": "transcribe",
                     "file_path": audio_path,
                 }
+                add_task_to_queue(
+                    task_id=task.task_id,
+                    user_id=user_id,
+                    task_type="transcribe",
+                    chat_id=chat_id,
+                    metadata={"file_path": audio_path},
+                )
                 self.chat_id_to_user_id[str(chat_id)] = str(user_id)
                 await self.safe_processor.safe_reply(
                     update,
@@ -655,6 +691,13 @@ class TelegramBotService:
                 )
                 self.producer.send_task(task)
                 self.pending_tasks[task.task_id] = {"chat_id": chat_id, "task_type": "image_gen"}
+                add_task_to_queue(
+                    task_id=task.task_id,
+                    user_id=user_id,
+                    task_type="image_gen",
+                    chat_id=chat_id,
+                    prompt=text,
+                )
                 self.chat_id_to_user_id[str(chat_id)] = str(user_id)
 
                 await self.safe_processor.safe_reply(
@@ -774,6 +817,8 @@ class TelegramBotService:
             )
             self.notification_consumer.start()
             logger.info("Notification consumer started")
+
+        self._load_pending_tasks_from_db()
 
         logger.info("Telegram bot started successfully!")
         application.run_polling(allowed_updates=Update.ALL_TYPES)

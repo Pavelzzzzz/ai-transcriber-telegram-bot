@@ -5,40 +5,30 @@ from sqlalchemy import Column, DateTime, Index, Integer, String, Text, create_en
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, sessionmaker
 
-from .database import get_database_url
+from .database import DATABASE_URL, Base
 
 logger = logging.getLogger(__name__)
 
-Base = None
 
-
-def get_base():
-    global Base
-    if Base is None:
-        from sqlalchemy.ext.declarative import declarative_base
-
-        Base = declarative_base()
-    return Base
-
-
-class TaskQueueItem(get_base()):
+class TaskQueueItem(Base):
     __tablename__ = "task_queue"
 
     task_id = Column(String(255), primary_key=True)
     user_id = Column(Integer, nullable=False, index=True)
+    chat_id = Column(Integer, nullable=True, index=True)
     task_type = Column(String(50), nullable=False)
     status = Column(String(20), default="pending", index=True)
     priority = Column(Integer, default=0, index=True)
     prompt = Column(Text)
-    metadata = Column(JSONB)
+    task_metadata = Column(JSONB)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
-    __table_args__ = (Index("idx_task_queue_priority", "priority", desc=True),)
+    __table_args__ = (Index("idx_task_queue_priority_priority", "priority"),)
 
 
 def get_task_queue_session() -> Session:
-    engine = create_engine(get_database_url())
+    engine = create_engine(DATABASE_URL)
     Session = sessionmaker(bind=engine)
     return Session()
 
@@ -50,15 +40,17 @@ def add_task(
     prompt: str = None,
     metadata: dict = None,
     priority: int = 0,
+    chat_id: int = None,
 ) -> bool:
     try:
         session = get_task_queue_session()
         task = TaskQueueItem(
             task_id=task_id,
             user_id=user_id,
+            chat_id=chat_id,
             task_type=task_type,
             prompt=prompt,
-            metadata=metadata,
+            task_metadata=metadata,
             priority=priority,
             status="pending",
         )
@@ -138,3 +130,35 @@ def get_pending_tasks(limit: int = 50) -> list[TaskQueueItem]:
     except Exception as e:
         logger.error(f"Failed to get pending tasks: {e}")
         return []
+
+
+def get_pending_tasks_by_chat_id(chat_id: int) -> list[TaskQueueItem]:
+    try:
+        session = get_task_queue_session()
+        tasks = (
+            session.query(TaskQueueItem)
+            .filter(TaskQueueItem.chat_id == chat_id, TaskQueueItem.status == "pending")
+            .all()
+        )
+        session.close()
+        return tasks
+    except Exception as e:
+        logger.error(f"Failed to get pending tasks by chat_id: {e}")
+        return []
+
+
+def delete_task(task_id: str) -> bool:
+    try:
+        session = get_task_queue_session()
+        task = session.query(TaskQueueItem).filter(TaskQueueItem.task_id == task_id).first()
+        if task:
+            session.delete(task)
+            session.commit()
+            session.close()
+            logger.info(f"Task {task_id} deleted from queue")
+            return True
+        session.close()
+        return False
+    except Exception as e:
+        logger.error(f"Failed to delete task: {e}")
+        return False

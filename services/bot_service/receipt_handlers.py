@@ -4,6 +4,7 @@ import re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from services.common.task_queue_repo import add_task as add_task_to_queue
 from services.common.user_settings_repo import (
     create_receipt_history,
     delete_receipt_history,
@@ -669,6 +670,12 @@ async def handle_confirm_receipt(
             "chat_id": chat_id,
             "task_type": "receipt",
         }
+    add_task_to_queue(
+        task_id=task.task_id,
+        user_id=user_id,
+        task_type="receipt",
+        chat_id=chat_id,
+    )
 
     if chat_id_to_user_id is not None:
         chat_id_to_user_id[str(chat_id)] = str(user_id)
@@ -802,6 +809,12 @@ async def handle_generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE
         metadata={"receipt_id": receipt_id, "is_json": True, "company": company},
     )
     producer.send_task(task)
+    add_task_to_queue(
+        task_id=task.task_id,
+        user_id=user_id,
+        task_type="receipt",
+        chat_id=chat_id,
+    )
 
     await context.bot.send_message(
         chat_id=chat_id,
