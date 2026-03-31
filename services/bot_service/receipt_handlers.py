@@ -638,6 +638,16 @@ async def handle_confirm_receipt(
                 if item.get("price", 0) == 0:
                     item["price"] = result.get("price", 0)
 
+    if not company:
+        try:
+            settings = get_or_create_user_settings(user_id)
+            company = settings.company if settings else None
+            logger.info(f"handle_confirm_receipt: company from settings='{company}'")
+        except Exception as e:
+            logger.warning(f"handle_confirm_receipt: failed to get settings: {e}")
+
+    logger.info(f"handle_confirm_receipt: final company='{company}'")
+
     items_json = json.dumps(items, ensure_ascii=False)
 
     receipt = create_receipt_history(
@@ -645,6 +655,7 @@ async def handle_confirm_receipt(
         items=items,
         total=sum(item.get("price", 0) * item.get("quantity", 1) for item in items),
         file_path="",
+        company=company,
     )
 
     await update.callback_query.edit_message_text(
@@ -798,8 +809,17 @@ async def handle_generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     items_json = json.dumps(items, ensure_ascii=False)
 
-    settings = get_or_create_user_settings(user_id)
-    company = settings.company if settings else None
+    company = draft.get("company")
+    logger.info(f"handle_generate_pdf: company from draft='{company}'")
+    if not company:
+        try:
+            settings = get_or_create_user_settings(user_id)
+            company = settings.company if settings else None
+            logger.info(f"handle_generate_pdf: company from settings='{company}'")
+        except Exception as e:
+            logger.warning(f"handle_generate_pdf: failed to get settings: {e}")
+
+    logger.info(f"handle_generate_pdf: final company='{company}', user_id={user_id}")
 
     producer = TaskProducer(kafka_config)
     task = producer.create_receipt_task(
@@ -809,6 +829,12 @@ async def handle_generate_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE
         metadata={"receipt_id": receipt_id, "is_json": True, "company": company},
     )
     producer.send_task(task)
+
+    pending_tasks = context.bot_data.get("pending_tasks")
+    if pending_tasks is not None:
+        pending_tasks[task.task_id] = {"chat_id": chat_id, "task_type": "receipt"}
+        logger.info(f"handle_generate_pdf: added task {task.task_id} to pending_tasks")
+
     add_task_to_queue(
         task_id=task.task_id,
         user_id=user_id,

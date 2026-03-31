@@ -1,6 +1,5 @@
 from .base_kafka_consumer import BaseKafkaConsumer
 from .base_service import BaseService, HealthCheckHandler, setup_logging
-from .database import check_db_health, get_db, init_db
 from .exceptions import (
     KafkaConsumerError,
     KafkaProducerError,
@@ -50,9 +49,6 @@ __all__ = [
     "KafkaConsumerError",
     "ProcessingError",
     "ValidationError",
-    "get_db",
-    "check_db_health",
-    "init_db",
     "BaseService",
     "BaseKafkaConsumer",
     "setup_logging",
